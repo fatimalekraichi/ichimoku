@@ -139,10 +139,10 @@
   <!-- ===== PORTEFEUILLE ===== -->
   <div class="pane" id="pane-portfolio">
     <div class="stats">
-      <div class="stat-card"><div class="stat-label">Valeur totale</div><div class="stat-value" id="pfValue">—</div></div>
-      <div class="stat-card"><div class="stat-label">Investi</div><div class="stat-value" id="pfCost">—</div></div>
-      <div class="stat-card"><div class="stat-label">P&L total</div><div class="stat-value" id="pfPL">—</div></div>
-      <div class="stat-card"><div class="stat-label">Performance</div><div class="stat-value" id="pfPct">—</div></div>
+      <div class="stat-card"><div class="stat-label">P&L total (€)</div><div class="stat-value" id="pfPL">—</div></div>
+      <div class="stat-card"><div class="stat-label">Sur capital</div><div class="stat-value" id="pfPct">—</div></div>
+      <div class="stat-card"><div class="stat-label">Positions</div><div class="stat-value" id="pfCost">—</div></div>
+      <div class="stat-card"><div class="stat-label">Exposition (€)</div><div class="stat-value" id="pfValue">—</div></div>
     </div>
     <div id="portfolioList"></div>
   </div>
@@ -180,6 +180,11 @@
         <label>Risque max par trade (%)</label>
         <input type="number" id="setRisk" value="2" step="0.5" onchange="saveSettings()">
         <div class="hint">El Bouzidi : ne jamais risquer plus de 10% du capital par semaine.</div>
+      </div>
+      <div class="field">
+        <label>Effet de levier (1:X)</label>
+        <input type="number" id="setLeverage" value="30" step="1" onchange="saveSettings()">
+        <div class="hint">En Europe : 30 pour les paires Forex majeures, 20 pour les indices. Sert à estimer la marge.</div>
       </div>
     </div>
 
@@ -272,19 +277,24 @@
 // ACTIFS
 // ============================================================
 const ASSETS = [
-  { symbol:'EURUSD=X', name:'EUR/USD', decimals:4, pip:0.0001 },
-  { symbol:'GBPUSD=X', name:'GBP/USD', decimals:4, pip:0.0001 },
-  { symbol:'USDJPY=X', name:'USD/JPY', decimals:2, pip:0.01 },
-  { symbol:'USDCHF=X', name:'USD/CHF', decimals:4, pip:0.0001 },
-  { symbol:'USDCAD=X', name:'USD/CAD', decimals:4, pip:0.0001 },
-  { symbol:'AUDUSD=X', name:'AUD/USD', decimals:4, pip:0.0001 },
-  { symbol:'NZDUSD=X', name:'NZD/USD', decimals:4, pip:0.0001 },
-  { symbol:'EURGBP=X', name:'EUR/GBP', decimals:4, pip:0.0001 },
-  { symbol:'EURJPY=X', name:'EUR/JPY', decimals:2, pip:0.01 },
-  { symbol:'GBPJPY=X', name:'GBP/JPY', decimals:2, pip:0.01 },
-  { symbol:'YM=F',     name:'Mini Dow Jones', decimals:0, pip:1 },
-  { symbol:'^GDAXI',   name:'DAX 40', decimals:2, pip:1 },
+  { symbol:'EURUSD=X', name:'EUR/USD', decimals:4, pip:0.0001, quote:'USD' },
+  { symbol:'GBPUSD=X', name:'GBP/USD', decimals:4, pip:0.0001, quote:'USD' },
+  { symbol:'USDJPY=X', name:'USD/JPY', decimals:2, pip:0.01, quote:'JPY' },
+  { symbol:'USDCHF=X', name:'USD/CHF', decimals:4, pip:0.0001, quote:'CHF' },
+  { symbol:'USDCAD=X', name:'USD/CAD', decimals:4, pip:0.0001, quote:'CAD' },
+  { symbol:'AUDUSD=X', name:'AUD/USD', decimals:4, pip:0.0001, quote:'USD' },
+  { symbol:'NZDUSD=X', name:'NZD/USD', decimals:4, pip:0.0001, quote:'USD' },
+  { symbol:'EURGBP=X', name:'EUR/GBP', decimals:4, pip:0.0001, quote:'GBP' },
+  { symbol:'EURJPY=X', name:'EUR/JPY', decimals:2, pip:0.01, quote:'JPY' },
+  { symbol:'GBPJPY=X', name:'GBP/JPY', decimals:2, pip:0.01, quote:'JPY' },
+  { symbol:'YM=F',     name:'Mini Dow Jones', decimals:0, pip:1, quote:'USD' },
+  { symbol:'^GDAXI',   name:'DAX 40', decimals:2, pip:1, quote:'EUR' },
 ];
+// Taux de change pour convertir la devise de cotation en EUR.
+// eurRates[X] = combien de X pour 1 EUR. Pour convertir un gain en X vers EUR : gainX / eurRates[X]
+let eurRates = { EUR:1 };
+function rateFor(quote){ return eurRates[quote] || 1; }
+function toEUR(amountInQuote, quote){ return amountInQuote / rateFor(quote); }
 const CORS_PROXIES = [
   'https://corsproxy.io/?url=',
   'https://api.allorigins.win/raw?url=',
@@ -304,7 +314,7 @@ function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); 
 
 let positions = load(LS.positions, []);
 let closed = load(LS.closed, []);
-let settings = load(LS.settings, { capital: 1000, risk: 2 });
+let settings = load(LS.settings, { capital: 1000, risk: 2, leverage: 30 });
 
 // ============================================================
 // CALCUL ICHIMOKU
@@ -445,12 +455,29 @@ async function analyzeOne(a) {
   }catch(e){ results[a.symbol]={error:e.message}; }
   renderScreener(); renderPortfolio();
 }
+async function fetchSpot(symbol){
+  try { const c=await fetchCandles(symbol,'1d','5d'); return c[c.length-1].close; }
+  catch(e){ return null; }
+}
+async function updateEurRates(){
+  // USD, JPY, GBP : déjà récupérés dans le screener
+  eurRates.USD = results['EURUSD=X']?.price || eurRates.USD;
+  eurRates.JPY = results['EURJPY=X']?.price || eurRates.JPY;
+  eurRates.GBP = results['EURGBP=X']?.price || eurRates.GBP;
+  // CHF, CAD : à récupérer en plus (non affichés dans le tableau)
+  const [chf,cad]=await Promise.all([fetchSpot('EURCHF=X'),fetchSpot('EURCAD=X')]);
+  if(chf) eurRates.CHF=chf;
+  if(cad) eurRates.CAD=cad;
+  eurRates.EUR=1;
+}
 async function runAnalysis() {
   const btn=document.getElementById('refreshBtn');
   btn.disabled=true; btn.textContent='⏳ Analyse…';
   document.getElementById('updateInfo').textContent='Analyse en cours (1-2 min)…';
   ASSETS.forEach(a=>{results[a.symbol]={loading:true};}); renderScreener();
   for(let i=0;i<ASSETS.length;i+=3){ await Promise.all(ASSETS.slice(i,i+3).map(analyzeOne)); }
+  await updateEurRates();
+  renderPortfolio();
   document.getElementById('updateInfo').textContent='✓ '+new Date().toLocaleString('fr-FR');
   btn.disabled=false; btn.textContent='↻ Actualiser';
 }
@@ -477,12 +504,15 @@ function openTrade(symbol, dir) {
     const below=[...new Set(r.daily.recentSenkouB)].filter(v=>v<price).sort((x,y)=>y-x);
     l1=below[0]||price*0.98; l2=below[Math.floor(below.length/2)]||price*0.96; l3=below[below.length-1]||price*0.92;
   }
-  const riskAmount=settings.capital*(settings.risk/100);
-  const stopDist=Math.abs(price-stop);
-  const qty=stopDist>0?(riskAmount/stopDist):0;
+  const riskAmount=settings.capital*(settings.risk/100); // en EUR
+  const stopDist=Math.abs(price-stop); // en devise de cotation
+  // qty telle que le risque converti en EUR = riskAmount
+  // risque€ = (stopDist × qty) / eurRate  =>  qty = riskAmount × eurRate / stopDist
+  const rate=rateFor(a.quote);
+  const qty=stopDist>0?(riskAmount*rate/stopDist):0;
 
   document.getElementById('buyTitle').textContent=(dir==='long'?'Acheter ':'Vendre (short) ')+a.name;
-  document.getElementById('buySub').textContent=a.symbol+' · cours '+price.toFixed(a.decimals)+(dir==='short'?' · position vendeuse, gain si ça baisse':'');
+  document.getElementById('buySub').textContent=a.symbol+' · cours '+price.toFixed(a.decimals)+' · coté en '+a.quote+(dir==='short'?' · vente, gain si ça baisse':'');
   document.getElementById('buyQty').value=Math.max(0,Math.round(qty*100)/100);
   document.getElementById('buyQtyHint').textContent='Suggérée pour risquer '+settings.risk+'% ('+riskAmount.toFixed(0)+'€)';
   document.getElementById('buyEntry').value=price.toFixed(a.decimals);
@@ -499,21 +529,43 @@ function openTrade(symbol, dir) {
   document.getElementById('buyModal').classList.add('show');
 }
 function updateBuyRecap() {
+  const a=ASSETS.find(x=>x.symbol===buySymbol);
+  const rate=rateFor(a.quote);
   const qty=parseFloat(document.getElementById('buyQty').value)||0;
   const entry=parseFloat(document.getElementById('buyEntry').value)||0;
   const stop=parseFloat(document.getElementById('buyStop').value)||0;
   const l1=parseFloat(document.getElementById('buyL1').value)||0;
-  // Pour un short, le risque et le gain sont inversés
-  const risk=buyDir==='long'?(entry-stop)*qty:(stop-entry)*qty;
-  const reward=buyDir==='long'?(l1-entry)*qty:(entry-l1)*qty;
-  const ratio=Math.abs(entry-stop)>0?Math.abs(reward/risk):0;
-  const riskPct=settings.capital>0?(Math.abs(risk)/settings.capital)*100:0;
+  // risque et gain en devise de cotation, puis converti en EUR
+  const riskQuote=buyDir==='long'?(entry-stop)*qty:(stop-entry)*qty;
+  const rewardQuote=buyDir==='long'?(l1-entry)*qty:(entry-l1)*qty;
+  const riskEUR=Math.abs(riskQuote)/rate;
+  const rewardEUR=Math.abs(rewardQuote)/rate;
+  const ratio=riskEUR>0?rewardEUR/riskEUR:0;
+  const riskPct=settings.capital>0?(riskEUR/settings.capital)*100:0;
+  const conv=a.quote==='EUR'?'(déjà en €)':`(1 € = ${rate?rate.toFixed(a.quote==='JPY'?2:4):'?'} ${a.quote})`;
+  // Taille en lots + exposition + marge
+  const lots=qty/100000;
+  const microLots=qty/1000;
+  const notionalEUR=rate>0?(qty*entry)/rate:0;
+  const lev=settings.leverage||30;
+  const marginEUR=notionalEUR/lev;
+  let sizeLabel;
+  if(a.symbol.includes('=X')){ // Forex : afficher en lots
+    sizeLabel=lots>=0.1?`${lots.toFixed(3)} lot(s)`:`${microLots.toFixed(2)} micro-lots (${lots.toFixed(4)} lot)`;
+  } else {
+    sizeLabel=`${qty.toFixed(qty<1?4:2)} unité(s)`;
+  }
   document.getElementById('buyRecap').innerHTML=
     `<div class="line"><span>Sens</span><span>${buyDir==='long'?'🟢 Achat (long)':'🔴 Vente (short)'}</span></div>
-     <div class="line"><span>Risque jusqu'au stop</span><span>${Math.abs(risk).toFixed(2)}€ (${riskPct.toFixed(1)}% du capital)</span></div>
-     <div class="line"><span>Gain potentiel L1</span><span>${Math.abs(reward).toFixed(2)}€</span></div>
+     <div class="line"><span>Devise de cotation</span><span>${a.quote} ${conv}</span></div>
+     <div class="line"><span>Taille de position</span><span><strong>${sizeLabel}</strong></span></div>
+     <div class="line"><span>Exposition (notionnel)</span><span>${notionalEUR.toFixed(0)} €</span></div>
+     <div class="line"><span>Marge requise (~1:${lev})</span><span>${marginEUR.toFixed(0)} €</span></div>
+     <div class="line" style="border-top:1px solid #d4c8a8; margin-top:4px; padding-top:6px"><span>Risque réel (stop)</span><span><strong style="color:#B85547">${riskEUR.toFixed(2)} €</strong> (${riskPct.toFixed(1)}% du capital)</span></div>
+     <div class="line"><span>Gain potentiel L1</span><span><strong style="color:#5D8F6B">${rewardEUR.toFixed(2)} €</strong></span></div>
      <div class="line"><span>Ratio gain/risque</span><span style="color:${ratio>=2?'#5D8F6B':'#B85547'}">${ratio.toFixed(2)}:1 ${ratio<2?'⚠️':'✓'}</span></div>`
-    +(riskPct>settings.risk?`<div class="line" style="color:#B85547">⚠️ Risque au-dessus de ton réglage (${settings.risk}%)</div>`:'');
+    +(marginEUR>settings.capital?`<div class="line" style="color:#B85547">⚠️ Marge requise supérieure à ton capital — réduis la quantité</div>`:'')
+    +(riskPct>settings.risk+0.5?`<div class="line" style="color:#B85547">⚠️ Risque au-dessus de ton réglage (${settings.risk}%)</div>`:'');
 }
 function closeBuy(){ document.getElementById('buyModal').classList.remove('show'); }
 function confirmBuy() {
@@ -521,7 +573,7 @@ function confirmBuy() {
   const qty=parseFloat(document.getElementById('buyQty').value)||0;
   if(qty<=0){ alert('Quantité invalide.'); return; }
   positions.push({
-    id:Date.now().toString(), symbol:buySymbol, name:a.name, decimals:a.decimals, dir:buyDir,
+    id:Date.now().toString(), symbol:buySymbol, name:a.name, decimals:a.decimals, dir:buyDir, quote:a.quote,
     qty, entry:parseFloat(document.getElementById('buyEntry').value),
     date:document.getElementById('buyDate').value,
     stop:parseFloat(document.getElementById('buyStop').value),
@@ -544,16 +596,19 @@ function renderPortfolio() {
     document.getElementById('pfValue').textContent='—'; document.getElementById('pfCost').textContent='—';
     document.getElementById('pfPL').textContent='—'; document.getElementById('pfPct').textContent='—';
     updatePill(); return; }
-  let totVal=0, totCost=0;
+  let totPLeur=0, totExpoEur=0;
   list.innerHTML=positions.map(p=>{
     const dir=p.dir||'long';
+    const quote=p.quote||'EUR';
+    const rate=rateFor(quote);
     const r=results[p.symbol];
     const cur=r&&r.price!=null?r.price:p.entry;
-    // P&L selon le sens : long gagne si ça monte, short gagne si ça baisse
-    const plAmt=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+    // P&L en devise de cotation puis converti en EUR
+    const plQuote=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+    const plEUR=plQuote/rate;
     const plPct=dir==='long'?((cur-p.entry)/p.entry)*100:((p.entry-cur)/p.entry)*100;
     const days=Math.floor((Date.now()-new Date(p.date).getTime())/86400000);
-    totVal+=cur*p.qty; totCost+=p.entry*p.qty;
+    totPLeur+=plEUR; totExpoEur+=(p.entry*p.qty)/rate;
     // alertes selon le sens
     const alerts=[];
     if(r&&r.daily){
@@ -566,11 +621,9 @@ function renderPortfolio() {
       }
       if(r.daily.anomaly) alerts.push('⚠️ Anomalie de tendance');
     }
-    // stop touché : long si cur<=stop, short si cur>=stop
     if(dir==='long'&&cur<=p.stop) alerts.push('⛔ Stop-loss touché');
     if(dir==='short'&&cur>=p.stop) alerts.push('⛔ Stop-loss touché');
     if(plPct>=20) alerts.push('🎯 +20% atteint');
-    // niveau atteint selon le sens
     let lvl=0;
     if(dir==='long'){ if(cur>=p.l1)lvl=1; if(cur>=p.l2)lvl=2; if(cur>=p.l3)lvl=3; }
     else { if(cur<=p.l1)lvl=1; if(cur<=p.l2)lvl=2; if(cur<=p.l3)lvl=3; }
@@ -579,14 +632,15 @@ function renderPortfolio() {
       : Math.min(100,Math.max(0,((p.entry-cur)/(p.entry-p.l3))*100));
     const plc=plPct>=0?'pos':'neg';
     const dirBadge=dir==='long'?'<span class="badge badge-buy" style="font-size:11px">LONG</span>':'<span class="badge badge-avoid" style="font-size:11px">SHORT</span>';
+    const sizeStr=p.symbol.includes('=X')?(p.qty/100000).toFixed(3)+' lot':p.qty+' u.';
     return `<div class="pos-card">
       <div class="pos-head">
-        <div><span class="ticker" style="font-size:17px">${p.name}</span> ${dirBadge} <span class="sub">${p.symbol}</span>
-          <div class="sub">Entré le ${new Date(p.date).toLocaleDateString('fr-FR')} · ${days}j · Qté ${p.qty}</div></div>
+        <div><span class="ticker" style="font-size:17px">${p.name}</span> ${dirBadge} <span class="sub">${p.symbol} · ${quote}</span>
+          <div class="sub">Entré le ${new Date(p.date).toLocaleDateString('fr-FR')} · ${days}j · ${sizeStr}</div></div>
         <div style="text-align:right">
           <div class="sub">Cours ${cur.toFixed(p.decimals)}</div>
           <div class="${plc}" style="font-size:18px">${plPct>=0?'+':''}${plPct.toFixed(2)}%</div>
-          <div class="${plc}" style="font-size:13px">${plAmt>=0?'+':''}${plAmt.toFixed(2)}€</div>
+          <div class="${plc}" style="font-size:14px"><strong>${plEUR>=0?'+':''}${plEUR.toFixed(2)} €</strong></div>
         </div>
       </div>
       <div class="progress"><div class="progress-fill" style="width:${prog}%"></div></div>
@@ -596,10 +650,10 @@ function renderPortfolio() {
       <div style="margin-top:10px"><button class="btn-sell" onclick="sellPosition('${p.id}')">${dir==='long'?'Vendre (clôturer)':'Racheter (clôturer)'}</button></div>
     </div>`;
   }).join('');
-  const pl=totVal-totCost, pct=totCost>0?(pl/totCost)*100:0;
-  document.getElementById('pfValue').textContent=totVal.toFixed(2)+'€';
-  document.getElementById('pfCost').textContent=totCost.toFixed(2)+'€';
-  const plEl=document.getElementById('pfPL'); plEl.textContent=(pl>=0?'+':'')+pl.toFixed(2)+'€'; plEl.style.color=pl>=0?'#5D8F6B':'#B85547';
+  const pct=settings.capital>0?(totPLeur/settings.capital)*100:0;
+  document.getElementById('pfValue').textContent=totExpoEur.toFixed(0)+'€';
+  document.getElementById('pfCost').textContent=positions.length;
+  const plEl=document.getElementById('pfPL'); plEl.textContent=(totPLeur>=0?'+':'')+totPLeur.toFixed(2)+'€'; plEl.style.color=totPLeur>=0?'#5D8F6B':'#B85547';
   const pctEl=document.getElementById('pfPct'); pctEl.textContent=(pct>=0?'+':'')+pct.toFixed(2)+'%'; pctEl.style.color=pct>=0?'#5D8F6B':'#B85547';
   updatePill();
 }
@@ -611,13 +665,16 @@ function updatePill(){
 function sellPosition(id) {
   const p=positions.find(x=>x.id===id); if(!p) return;
   const dir=p.dir||'long';
+  const quote=p.quote||'EUR';
+  const rate=rateFor(quote);
   const r=results[p.symbol];
   const cur=r&&r.price!=null?r.price:p.entry;
   if(!confirm(`Clôturer ${p.name} (${dir==='long'?'achat':'vente'}) à ${cur.toFixed(p.decimals)} ?`)) return;
   const reason=prompt('Raison de la clôture ?','Signal de sortie')||'Clôture';
-  const realizedPL=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+  const plQuote=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+  const realizedPL=plQuote/rate; // converti en EUR
   const realizedPct=dir==='long'?((cur-p.entry)/p.entry)*100:((p.entry-cur)/p.entry)*100;
-  closed.push({...p, dir, exitPrice:cur, exitDate:new Date().toISOString(), realizedPL, realizedPct, reason});
+  closed.push({...p, dir, quote, exitPrice:cur, exitDate:new Date().toISOString(), realizedPL, realizedPct, reason});
   positions=positions.filter(x=>x.id!==id);
   save(LS.positions,positions); save(LS.closed,closed);
   renderPortfolio(); renderHistory(); updatePill();
@@ -660,6 +717,7 @@ function renderHistory() {
 function saveSettings() {
   settings.capital=parseFloat(document.getElementById('setCapital').value)||1000;
   settings.risk=parseFloat(document.getElementById('setRisk').value)||2;
+  settings.leverage=parseFloat(document.getElementById('setLeverage').value)||30;
   save(LS.settings,settings);
 }
 function exportData() {
@@ -701,6 +759,7 @@ function switchTab(tab) {
 // ============================================================
 document.getElementById('setCapital').value=settings.capital;
 document.getElementById('setRisk').value=settings.risk;
+document.getElementById('setLeverage').value=settings.leverage||30;
 renderPortfolio(); renderHistory(); updatePill();
 window.addEventListener('load',()=>setTimeout(runAnalysis,400));
 </script>
