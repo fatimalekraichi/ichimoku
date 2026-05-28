@@ -114,13 +114,13 @@
       <button class="btn" id="refreshBtn" onclick="runAnalysis()">↻ Actualiser</button>
     </div>
     <div class="info-box">
-      <strong>Le verdict</strong> combine journalier + hebdo selon les 5 conditions El Bouzidi. 🚀 <strong>CONFLUENCE</strong> = signal fort sur les deux échelles. ⚠️ = anomalie de tendance (prudence). Clique <strong>Acheter</strong> pour suivre une position automatiquement.
+      <strong>Le verdict</strong> combine journalier + hebdo selon les 5 conditions El Bouzidi. 🚀 <strong>ACHAT</strong> / 💥 <strong>VENTE</strong> = signal fort confirmé sur les deux échelles. Clique <strong>Acheter</strong> (long) ou <strong>Vendre</strong> (short) pour suivre la position automatiquement. ⚠️ = anomalie de tendance (prudence).
     </div>
     <div class="stats">
       <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="totalCount">—</div></div>
       <div class="stat-card"><div class="stat-label">🚀 Confluences</div><div class="stat-value" id="confluenceCount" style="color:#5D8F6B">—</div></div>
       <div class="stat-card"><div class="stat-label">🟢 Acheter</div><div class="stat-value" id="buyCount" style="color:#5D8F6B">—</div></div>
-      <div class="stat-card"><div class="stat-label">🔴 Éviter</div><div class="stat-value" id="avoidCount" style="color:#B85547">—</div></div>
+      <div class="stat-card"><div class="stat-label">🔴 Vendre</div><div class="stat-value" id="avoidCount" style="color:#B85547">—</div></div>
     </div>
     <div class="table-wrap">
       <table>
@@ -329,21 +329,33 @@ function analyze(data) {
   const kumoTop=(sA!=null&&sB!=null)?Math.max(sA,sB):null;
   const kumoBot=(sA!=null&&sB!=null)?Math.min(sA,sB):null;
   const idx26=data.length-1-26;
-  const chikouFree=idx26>=0?price>data[idx26].close:false;
-  const cond=[chikouFree, price>Math.max(last.tenkan,last.kijun), kumoTop!=null&&price>kumoTop,
-              last.tenkan>last.kijun, (last.senkouA_future||sA)>(last.senkouB_future||sB)];
-  const score=cond.filter(Boolean).length;
+  const chikouUp=idx26>=0?price>data[idx26].close:false;   // Chinkou au-dessus = haussier
+  const chikouDown=idx26>=0?price<data[idx26].close:false; // Chinkou en-dessous = baissier
+  const futA=(last.senkouA_future||sA), futB=(last.senkouB_future||sB);
+  // 5 conditions HAUSSIÈRES
+  const bull=[chikouUp, price>Math.max(last.tenkan,last.kijun), kumoTop!=null&&price>kumoTop,
+              last.tenkan>last.kijun, futA>futB];
+  // 5 conditions BAISSIÈRES (inverse exact)
+  const bear=[chikouDown, price<Math.min(last.tenkan,last.kijun), kumoBot!=null&&price<kumoBot,
+              last.tenkan<last.kijun, futA<futB];
+  const bullScore=bull.filter(Boolean).length;
+  const bearScore=bear.filter(Boolean).length;
   const tkW=Math.abs(last.tenkan-last.kijun), kW=(sA!=null&&sB!=null)?Math.abs(sA-sB):0;
   const anomaly=kW>0&&tkW>kW;
   const prev=data[data.length-2];
   const bearishCross=prev&&prev.tenkan!=null&&prev.kijun!=null&&prev.tenkan>=prev.kijun&&last.tenkan<last.kijun;
+  const bullishCross=prev&&prev.tenkan!=null&&prev.kijun!=null&&prev.tenkan<=prev.kijun&&last.tenkan>last.kijun;
   const belowKumo=kumoBot!=null&&price<kumoBot;
-  let verdict;
-  if(score===5&&!anomaly) verdict='BUY_STRONG';
-  else if(score>=3&&!anomaly) verdict='WATCH';
-  else if(score<=1) verdict='AVOID';
-  else verdict='NEUTRAL';
-  return { score, verdict, anomaly, bearishCross, belowKumo, kijun:last.kijun, senkouB:sB,
+  const aboveKumo=kumoTop!=null&&price>kumoTop;
+  // Verdict : haussier ou baissier prioritaire selon le score le plus fort
+  let verdict, score;
+  if(bullScore===5&&!anomaly){ verdict='BUY_STRONG'; score=bullScore; }
+  else if(bearScore===5&&!anomaly){ verdict='SELL_STRONG'; score=bearScore; }
+  else if(bullScore>=3&&bullScore>bearScore&&!anomaly){ verdict='WATCH_BUY'; score=bullScore; }
+  else if(bearScore>=3&&bearScore>bullScore&&!anomaly){ verdict='WATCH_SELL'; score=bearScore; }
+  else { verdict='NEUTRAL'; score=Math.max(bullScore,bearScore); }
+  return { score, bullScore, bearScore, verdict, anomaly, bearishCross, bullishCross,
+           belowKumo, aboveKumo, kijun:last.kijun, senkouB:sB,
            recentSenkouB: data.slice(-60).map(d=>d.senkouB).filter(v=>v!=null) };
 }
 
@@ -374,10 +386,12 @@ async function fetchCandles(symbol, interval, range) {
 // SCREENER
 // ============================================================
 const results={};
-function badge(verdict, anomaly, confluence) {
-  if(confluence) return '<span class="badge badge-confluence">🚀 CONFLUENCE</span>';
-  const map={BUY_STRONG:['badge-buy','🟢 ACHETER'],WATCH:['badge-watch','🟡 SURVEILLER'],
-             NEUTRAL:['badge-neutral','⚪ NEUTRE'],AVOID:['badge-avoid','🔴 ÉVITER']};
+function badge(verdict, anomaly, confluenceBuy, confluenceSell) {
+  if(confluenceBuy) return '<span class="badge badge-confluence">🚀 CONFLUENCE ACHAT</span>';
+  if(confluenceSell) return '<span class="badge badge-sell">💥 CONFLUENCE VENTE</span>';
+  const map={BUY_STRONG:['badge-buy','🟢 ACHETER'],WATCH_BUY:['badge-watch','🟡 SURVEILLER ↑'],
+             SELL_STRONG:['badge-avoid','🔴 VENDRE'],WATCH_SELL:['badge-watch','🟠 SURVEILLER ↓'],
+             NEUTRAL:['badge-neutral','⚪ NEUTRE']};
   const [c,l]=map[verdict]||map.NEUTRAL;
   return `<span class="badge ${c}">${l}</span>`+(anomaly?'<span class="warn-icon">⚠️</span>':'');
 }
@@ -385,7 +399,12 @@ function screenerRow(a, r) {
   if(!r||r.loading) return `<tr><td><div class="ticker">${a.name}</div><div class="sub">${a.symbol}</div></td>
     <td colspan="7" class="loading">${r&&r.error?'<span class="error">⚠ '+r.error+'</span>':'⏳ Chargement…'}</td></tr>`;
   const ch=r.change>=0?'pos':'neg';
-  const canBuy=r.daily&&r.daily.verdict!=='AVOID';
+  const v=r.daily?r.daily.verdict:'NEUTRAL';
+  const isBull=v==='BUY_STRONG'||v==='WATCH_BUY';
+  const isBear=v==='SELL_STRONG'||v==='WATCH_SELL';
+  let action='<span class="sub">—</span>';
+  if(isBull) action=`<button class="btn-buy" onclick="openTrade('${a.symbol}','long')">Acheter</button>`;
+  else if(isBear) action=`<button class="btn-sell" onclick="openTrade('${a.symbol}','short')">Vendre</button>`;
   return `<tr>
     <td><div class="ticker">${a.name}</div><div class="sub">${a.symbol}</div></td>
     <td class="right">${r.price!=null?r.price.toFixed(a.decimals):'—'}</td>
@@ -393,25 +412,25 @@ function screenerRow(a, r) {
     <td class="center">${r.weekly?badge(r.weekly.verdict,r.weekly.anomaly):'—'}</td>
     <td class="center">${r.daily?badge(r.daily.verdict,r.daily.anomaly):'—'}</td>
     <td class="center"><strong>${r.daily?r.daily.score+'/5':'—'}</strong></td>
-    <td class="center">${r.daily?badge(r.daily.verdict,r.daily.anomaly,r.confluence):'—'}</td>
-    <td class="center">${canBuy?`<button class="btn-buy" onclick="openBuy('${a.symbol}')">Acheter</button>`:'<span class="sub">—</span>'}</td>
+    <td class="center">${r.daily?badge(r.daily.verdict,r.daily.anomaly,r.confluenceBuy,r.confluenceSell):'—'}</td>
+    <td class="center">${action}</td>
   </tr>`;
 }
 function renderScreener() {
-  const order={BUY_STRONG:0,WATCH:1,NEUTRAL:2,AVOID:3};
+  const order={BUY_STRONG:0,SELL_STRONG:1,WATCH_BUY:2,WATCH_SELL:3,NEUTRAL:4};
   const sorted=[...ASSETS].sort((a,b)=>{
     const ra=results[a.symbol],rb=results[b.symbol];
     if(!ra||!rb||ra.loading||rb.loading) return 0;
-    if(ra.confluence&&!rb.confluence) return -1;
-    if(!ra.confluence&&rb.confluence) return 1;
+    const ca=(ra.confluenceBuy||ra.confluenceSell)?0:1, cb=(rb.confluenceBuy||rb.confluenceSell)?0:1;
+    if(ca!==cb) return ca-cb;
     return (order[ra.daily?.verdict]??9)-(order[rb.daily?.verdict]??9);
   });
   document.getElementById('screenerBody').innerHTML=sorted.map(a=>screenerRow(a,results[a.symbol])).join('');
   const arr=Object.values(results).filter(r=>r&&!r.loading&&!r.error);
   document.getElementById('totalCount').textContent=arr.length;
-  document.getElementById('confluenceCount').textContent=arr.filter(r=>r.confluence).length;
+  document.getElementById('confluenceCount').textContent=arr.filter(r=>r.confluenceBuy||r.confluenceSell).length;
   document.getElementById('buyCount').textContent=arr.filter(r=>r.daily?.verdict==='BUY_STRONG').length;
-  document.getElementById('avoidCount').textContent=arr.filter(r=>r.daily?.verdict==='AVOID').length;
+  document.getElementById('avoidCount').textContent=arr.filter(r=>r.daily?.verdict==='SELL_STRONG').length;
 }
 async function analyzeOne(a) {
   results[a.symbol]={loading:true}; renderScreener();
@@ -420,8 +439,9 @@ async function analyzeOne(a) {
     const dS=analyze(ichimoku(d)), wS=analyze(ichimoku(w));
     const price=d[d.length-1].close, pp=d[d.length-2]?.close||price;
     const change=((price-pp)/pp)*100;
-    const confluence=dS?.verdict==='BUY_STRONG'&&wS?.verdict==='BUY_STRONG';
-    results[a.symbol]={price,change,daily:dS,weekly:wS,confluence};
+    const confluenceBuy=dS?.verdict==='BUY_STRONG'&&wS?.verdict==='BUY_STRONG';
+    const confluenceSell=dS?.verdict==='SELL_STRONG'&&wS?.verdict==='SELL_STRONG';
+    results[a.symbol]={price,change,daily:dS,weekly:wS,confluenceBuy,confluenceSell};
   }catch(e){ results[a.symbol]={error:e.message}; }
   renderScreener(); renderPortfolio();
 }
@@ -438,29 +458,32 @@ async function runAnalysis() {
 // ============================================================
 // MODALE ACHAT
 // ============================================================
-let buySymbol=null;
-function openBuy(symbol) {
-  buySymbol=symbol;
+let buySymbol=null, buyDir='long';
+function openTrade(symbol, dir) {
+  buySymbol=symbol; buyDir=dir;
   const a=ASSETS.find(x=>x.symbol===symbol);
   const r=results[symbol];
   if(!r||!r.daily){ alert("Données pas encore prêtes, patiente."); return; }
-  const price=r.price;
-  const kijun=r.daily.kijun;
-  // Stop : 30 pips sous le dernier plat de Kijun
-  const stop=kijun-30*a.pip;
-  // Limites = paliers de Senkou B au-dessus du prix
-  const sbAbove=[...new Set(r.daily.recentSenkouB)].filter(v=>v>price).sort((x,y)=>x-y);
-  const l1=sbAbove[0]||price*1.02;
-  const l2=sbAbove[Math.floor(sbAbove.length/2)]||price*1.04;
-  const l3=sbAbove[sbAbove.length-1]||price*1.08;
-  // Quantité selon risque
+  const price=r.price, kijun=r.daily.kijun;
+  let stop, l1, l2, l3;
+  if(dir==='long'){
+    // Achat : stop 30 pips SOUS le Kijun, limites = paliers Senkou B AU-DESSUS
+    stop=kijun-30*a.pip;
+    const above=[...new Set(r.daily.recentSenkouB)].filter(v=>v>price).sort((x,y)=>x-y);
+    l1=above[0]||price*1.02; l2=above[Math.floor(above.length/2)]||price*1.04; l3=above[above.length-1]||price*1.08;
+  } else {
+    // Vente à découvert : stop 30 pips AU-DESSUS du Kijun, limites = paliers Senkou B EN-DESSOUS
+    stop=kijun+30*a.pip;
+    const below=[...new Set(r.daily.recentSenkouB)].filter(v=>v<price).sort((x,y)=>y-x);
+    l1=below[0]||price*0.98; l2=below[Math.floor(below.length/2)]||price*0.96; l3=below[below.length-1]||price*0.92;
+  }
   const riskAmount=settings.capital*(settings.risk/100);
   const stopDist=Math.abs(price-stop);
   const qty=stopDist>0?(riskAmount/stopDist):0;
 
-  document.getElementById('buyTitle').textContent='Acheter '+a.name;
-  document.getElementById('buySub').textContent=a.symbol+' · cours '+price.toFixed(a.decimals);
-  document.getElementById('buyQty').value=qty.toFixed(a.decimals===0?2:0)>0?Math.max(0,Math.round(qty*100)/100):0;
+  document.getElementById('buyTitle').textContent=(dir==='long'?'Acheter ':'Vendre (short) ')+a.name;
+  document.getElementById('buySub').textContent=a.symbol+' · cours '+price.toFixed(a.decimals)+(dir==='short'?' · position vendeuse, gain si ça baisse':'');
+  document.getElementById('buyQty').value=Math.max(0,Math.round(qty*100)/100);
   document.getElementById('buyQtyHint').textContent='Suggérée pour risquer '+settings.risk+'% ('+riskAmount.toFixed(0)+'€)';
   document.getElementById('buyEntry').value=price.toFixed(a.decimals);
   document.getElementById('buyDate').value=new Date().toISOString().split('T')[0];
@@ -469,23 +492,26 @@ function openBuy(symbol) {
   document.getElementById('buyL2').value=l2.toFixed(a.decimals);
   document.getElementById('buyL3').value=l3.toFixed(a.decimals);
   document.getElementById('buyNote').value='';
+  document.querySelector('#buyModal .modal-actions .btn').style.background=dir==='long'?'#5D8F6B':'#B85547';
+  document.querySelector('#buyModal .modal-actions .btn').textContent=dir==='long'?'Confirmer l\'achat':'Confirmer la vente';
   updateBuyRecap();
   ['buyQty','buyEntry','buyStop','buyL1'].forEach(id=>document.getElementById(id).oninput=updateBuyRecap);
   document.getElementById('buyModal').classList.add('show');
 }
 function updateBuyRecap() {
-  const a=ASSETS.find(x=>x.symbol===buySymbol);
   const qty=parseFloat(document.getElementById('buyQty').value)||0;
   const entry=parseFloat(document.getElementById('buyEntry').value)||0;
   const stop=parseFloat(document.getElementById('buyStop').value)||0;
   const l1=parseFloat(document.getElementById('buyL1').value)||0;
-  const risk=(entry-stop)*qty;
-  const reward=(l1-entry)*qty;
-  const ratio=Math.abs(entry-stop)>0?Math.abs((l1-entry)/(entry-stop)):0;
-  const riskPct=settings.capital>0?(risk/settings.capital)*100:0;
+  // Pour un short, le risque et le gain sont inversés
+  const risk=buyDir==='long'?(entry-stop)*qty:(stop-entry)*qty;
+  const reward=buyDir==='long'?(l1-entry)*qty:(entry-l1)*qty;
+  const ratio=Math.abs(entry-stop)>0?Math.abs(reward/risk):0;
+  const riskPct=settings.capital>0?(Math.abs(risk)/settings.capital)*100:0;
   document.getElementById('buyRecap').innerHTML=
-    `<div class="line"><span>Risque jusqu'au stop</span><span>${risk.toFixed(2)}€ (${riskPct.toFixed(1)}% du capital)</span></div>
-     <div class="line"><span>Gain potentiel L1</span><span>${reward.toFixed(2)}€</span></div>
+    `<div class="line"><span>Sens</span><span>${buyDir==='long'?'🟢 Achat (long)':'🔴 Vente (short)'}</span></div>
+     <div class="line"><span>Risque jusqu'au stop</span><span>${Math.abs(risk).toFixed(2)}€ (${riskPct.toFixed(1)}% du capital)</span></div>
+     <div class="line"><span>Gain potentiel L1</span><span>${Math.abs(reward).toFixed(2)}€</span></div>
      <div class="line"><span>Ratio gain/risque</span><span style="color:${ratio>=2?'#5D8F6B':'#B85547'}">${ratio.toFixed(2)}:1 ${ratio<2?'⚠️':'✓'}</span></div>`
     +(riskPct>settings.risk?`<div class="line" style="color:#B85547">⚠️ Risque au-dessus de ton réglage (${settings.risk}%)</div>`:'');
 }
@@ -495,7 +521,7 @@ function confirmBuy() {
   const qty=parseFloat(document.getElementById('buyQty').value)||0;
   if(qty<=0){ alert('Quantité invalide.'); return; }
   positions.push({
-    id:Date.now().toString(), symbol:buySymbol, name:a.name, decimals:a.decimals,
+    id:Date.now().toString(), symbol:buySymbol, name:a.name, decimals:a.decimals, dir:buyDir,
     qty, entry:parseFloat(document.getElementById('buyEntry').value),
     date:document.getElementById('buyDate').value,
     stop:parseFloat(document.getElementById('buyStop').value),
@@ -520,27 +546,42 @@ function renderPortfolio() {
     updatePill(); return; }
   let totVal=0, totCost=0;
   list.innerHTML=positions.map(p=>{
+    const dir=p.dir||'long';
     const r=results[p.symbol];
     const cur=r&&r.price!=null?r.price:p.entry;
-    const plAmt=(cur-p.entry)*p.qty;
-    const plPct=((cur-p.entry)/p.entry)*100;
+    // P&L selon le sens : long gagne si ça monte, short gagne si ça baisse
+    const plAmt=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+    const plPct=dir==='long'?((cur-p.entry)/p.entry)*100:((p.entry-cur)/p.entry)*100;
     const days=Math.floor((Date.now()-new Date(p.date).getTime())/86400000);
     totVal+=cur*p.qty; totCost+=p.entry*p.qty;
-    // alertes
+    // alertes selon le sens
     const alerts=[];
     if(r&&r.daily){
-      if(r.daily.bearishCross) alerts.push('🔴 Croisement Tenkan/Kijun baissier');
-      if(r.daily.belowKumo) alerts.push('🔴 Cours sous le Kumo');
+      if(dir==='long'){
+        if(r.daily.bearishCross) alerts.push('🔴 Croisement Tenkan/Kijun baissier → clôturer l\'achat');
+        if(r.daily.belowKumo) alerts.push('🔴 Cours sous le Kumo → sortie');
+      } else {
+        if(r.daily.bullishCross) alerts.push('🟢 Croisement Tenkan/Kijun haussier → clôturer la vente');
+        if(r.daily.aboveKumo) alerts.push('🟢 Cours au-dessus du Kumo → sortie');
+      }
       if(r.daily.anomaly) alerts.push('⚠️ Anomalie de tendance');
     }
-    if(cur<=p.stop) alerts.push('⛔ Stop-loss touché');
+    // stop touché : long si cur<=stop, short si cur>=stop
+    if(dir==='long'&&cur<=p.stop) alerts.push('⛔ Stop-loss touché');
+    if(dir==='short'&&cur>=p.stop) alerts.push('⛔ Stop-loss touché');
     if(plPct>=20) alerts.push('🎯 +20% atteint');
-    let lvl=0; if(cur>=p.l1)lvl=1; if(cur>=p.l2)lvl=2; if(cur>=p.l3)lvl=3;
-    const prog=Math.min(100,Math.max(0,((cur-p.entry)/(p.l3-p.entry))*100));
+    // niveau atteint selon le sens
+    let lvl=0;
+    if(dir==='long'){ if(cur>=p.l1)lvl=1; if(cur>=p.l2)lvl=2; if(cur>=p.l3)lvl=3; }
+    else { if(cur<=p.l1)lvl=1; if(cur<=p.l2)lvl=2; if(cur<=p.l3)lvl=3; }
+    const prog=dir==='long'
+      ? Math.min(100,Math.max(0,((cur-p.entry)/(p.l3-p.entry))*100))
+      : Math.min(100,Math.max(0,((p.entry-cur)/(p.entry-p.l3))*100));
     const plc=plPct>=0?'pos':'neg';
+    const dirBadge=dir==='long'?'<span class="badge badge-buy" style="font-size:11px">LONG</span>':'<span class="badge badge-avoid" style="font-size:11px">SHORT</span>';
     return `<div class="pos-card">
       <div class="pos-head">
-        <div><span class="ticker" style="font-size:17px">${p.name}</span> <span class="sub">${p.symbol}</span>
+        <div><span class="ticker" style="font-size:17px">${p.name}</span> ${dirBadge} <span class="sub">${p.symbol}</span>
           <div class="sub">Entré le ${new Date(p.date).toLocaleDateString('fr-FR')} · ${days}j · Qté ${p.qty}</div></div>
         <div style="text-align:right">
           <div class="sub">Cours ${cur.toFixed(p.decimals)}</div>
@@ -552,7 +593,7 @@ function renderPortfolio() {
       <div class="sub" style="margin-top:4px">Entrée ${p.entry.toFixed(p.decimals)} · Stop ${p.stop.toFixed(p.decimals)} · L1 ${p.l1.toFixed(p.decimals)} · L2 ${p.l2.toFixed(p.decimals)} · L3 ${p.l3.toFixed(p.decimals)} ${lvl>0?'· 🎯 L'+lvl+' atteinte':''}</div>
       ${alerts.length?`<div class="alert-box">${alerts.join('<br>')}</div>`:''}
       ${p.note?`<div class="sub" style="margin-top:6px">📝 ${p.note}</div>`:''}
-      <div style="margin-top:10px"><button class="btn-sell" onclick="sellPosition('${p.id}')">Vendre</button></div>
+      <div style="margin-top:10px"><button class="btn-sell" onclick="sellPosition('${p.id}')">${dir==='long'?'Vendre (clôturer)':'Racheter (clôturer)'}</button></div>
     </div>`;
   }).join('');
   const pl=totVal-totCost, pct=totCost>0?(pl/totCost)*100:0;
@@ -569,12 +610,14 @@ function updatePill(){
 }
 function sellPosition(id) {
   const p=positions.find(x=>x.id===id); if(!p) return;
+  const dir=p.dir||'long';
   const r=results[p.symbol];
   const cur=r&&r.price!=null?r.price:p.entry;
-  if(!confirm(`Vendre ${p.name} à ${cur.toFixed(p.decimals)} ?`)) return;
-  const reason=prompt('Raison de la vente ?','Signal de sortie')||'Vente';
-  closed.push({...p, exitPrice:cur, exitDate:new Date().toISOString(),
-    realizedPL:(cur-p.entry)*p.qty, realizedPct:((cur-p.entry)/p.entry)*100, reason});
+  if(!confirm(`Clôturer ${p.name} (${dir==='long'?'achat':'vente'}) à ${cur.toFixed(p.decimals)} ?`)) return;
+  const reason=prompt('Raison de la clôture ?','Signal de sortie')||'Clôture';
+  const realizedPL=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+  const realizedPct=dir==='long'?((cur-p.entry)/p.entry)*100:((p.entry-cur)/p.entry)*100;
+  closed.push({...p, dir, exitPrice:cur, exitDate:new Date().toISOString(), realizedPL, realizedPct, reason});
   positions=positions.filter(x=>x.id!==id);
   save(LS.positions,positions); save(LS.closed,closed);
   renderPortfolio(); renderHistory(); updatePill();
@@ -590,9 +633,10 @@ function renderHistory() {
     document.getElementById('hPL').textContent='—'; document.getElementById('hAvg').textContent='—'; return; }
   body.innerHTML=[...closed].reverse().map(c=>{
     const plc=c.realizedPL>=0?'pos':'neg';
+    const d=(c.dir||'long')==='long'?'L':'S';
     return `<tr>
       <td class="sub">${new Date(c.exitDate).toLocaleDateString('fr-FR')}</td>
-      <td>${c.name}</td>
+      <td>${c.name} <span class="sub">${d}</span></td>
       <td class="right">${c.entry.toFixed(c.decimals)}</td>
       <td class="right">${c.exitPrice.toFixed(c.decimals)}</td>
       <td class="right">${c.qty}</td>
