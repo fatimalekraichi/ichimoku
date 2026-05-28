@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screener Ichimoku — Méthode El Bouzidi</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #F5F1E8;
+    color: #1B2845;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+  header {
+    border-bottom: 1px solid #EBE5D4;
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+  }
+  h1 { font-size: 28px; font-weight: 700; color: #1B2845; }
+  .subtitle { font-size: 12px; color: #7A8B70; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
+  .controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .update-info { font-size: 13px; color: #7A8B70; }
+  .btn {
+    background: #1B2845;
+    color: #F5F1E8;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: white;
+    border: 1px solid #EBE5D4;
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .stat-label { font-size: 11px; color: #7A8B70; text-transform: uppercase; letter-spacing: 1.5px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: #1B2845; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .table-wrap {
+    background: white;
+    border: 1px solid #EBE5D4;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead { background: #EBE5D4; }
+  th {
+    text-align: left;
+    padding: 14px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #7A8B70;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #d4c8a8;
+  }
+  th.center { text-align: center; }
+  th.right { text-align: right; }
+  td {
+    padding: 14px 12px;
+    border-bottom: 1px solid #F0EBD9;
+    font-variant-numeric: tabular-nums;
+  }
+  td.center { text-align: center; }
+  td.right { text-align: right; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #FAF7EE; }
+  .ticker { font-weight: 600; }
+  .name { color: #1B2845; }
+  .badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .badge-buy { background: #5D8F6B; color: white; }
+  .badge-watch { background: #D4C77A; color: #1B2845; }
+  .badge-neutral { background: #BFB298; color: #1B2845; }
+  .badge-avoid { background: #B85547; color: white; }
+  .badge-confluence {
+    background: linear-gradient(135deg, #5D8F6B, #4A7355);
+    color: white;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+  .pos { color: #5D8F6B; font-weight: 600; }
+  .neg { color: #B85547; font-weight: 600; }
+  .loading { color: #BFB298; font-style: italic; font-size: 13px; }
+  .error { color: #B85547; font-size: 12px; }
+  .anomaly { background: #FFF3CD; color: #856404; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-left: 4px; }
+  .info-box {
+    background: #FFF9D9;
+    border-left: 4px solid #D4C77A;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+  .footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #EBE5D4;
+    font-size: 12px;
+    color: #7A8B70;
+    text-align: center;
+  }
+  details {
+    background: white;
+    border: 1px solid #EBE5D4;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+  }
+  details summary { cursor: pointer; font-weight: 600; color: #1B2845; }
+  details[open] summary { margin-bottom: 8px; }
+  details p { font-size: 13px; line-height: 1.6; color: #1B2845; }
+  details ul { margin-left: 20px; margin-top: 6px; font-size: 13px; line-height: 1.7; }
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1B2845;
+    margin: 30px 0 14px 0;
+  }
+  .conditions {
+    font-size: 11px;
+    color: #7A8B70;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Screener Ichimoku</h1>
+    <div class="subtitle">Méthode Khalid El Bouzidi · Forex + Indices</div>
+  </header>
+
+  <div class="controls">
+    <div class="update-info" id="updateInfo">Cliquez sur "Analyser" pour démarrer</div>
+    <button class="btn" id="refreshBtn" onclick="runAnalysis()">↻ Analyser tous les actifs</button>
+  </div>
+
+  <div class="info-box">
+    <strong>Comment lire ce tableau :</strong> Le verdict combine les signaux journalier et hebdomadaire selon les 5 conditions de tendance haussière d'El Bouzidi. 🚀 <strong>CONFLUENCE</strong> = signal fort confirmé sur les deux échelles (configuration optimale). ⚠️ = anomalie de tendance détectée (zone Tenkan/Kijun plus large que le Kumo → reflux imminent).
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Total actifs</div>
+      <div class="stat-value" id="totalCount">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">🚀 Confluences</div>
+      <div class="stat-value" id="confluenceCount" style="color:#5D8F6B">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">🟢 Acheter</div>
+      <div class="stat-value" id="buyCount" style="color:#5D8F6B">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">🔴 Éviter</div>
+      <div class="stat-value" id="avoidCount" style="color:#B85547">—</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Actif</th>
+          <th class="right">Cours</th>
+          <th class="right">Var %</th>
+          <th class="center">Hebdo</th>
+          <th class="center">Journalier</th>
+          <th class="center">Score</th>
+          <th class="center">Verdict</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr><td colSpan="7" style="text-align:center; padding:30px; color:#BFB298;">Cliquez sur "Analyser" pour récupérer les cours et calculer les signaux</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="section-title">📚 Règles El Bouzidi appliquées</h2>
+
+  <details>
+    <summary>Les 5 conditions de tendance haussière</summary>
+    <ul>
+      <li><strong>Chinkou libre</strong> : la clôture actuelle dépasse celle d'il y a 26 périodes</li>
+      <li><strong>Cours au-dessus de la zone Tenkan/Kijun</strong></li>
+      <li><strong>Cours au-dessus du Kumo</strong> (nuage)</li>
+      <li><strong>Tenkan au-dessus du Kijun</strong> (croisement haussier)</li>
+      <li><strong>Kumo futur haussier</strong> (Senkou A projeté &gt; Senkou B projeté)</li>
+    </ul>
+    <p style="margin-top:8px;">Score 5/5 + signaux confirmés sur hebdo ET journalier = 🚀 <strong>CONFLUENCE</strong> (configuration optimale pour entrer).</p>
+  </details>
+
+  <details>
+    <summary>Anomalie de tendance</summary>
+    <p>Quand la zone Tenkan/Kijun devient plus large que le Kumo, c'est un signal de faiblesse. El Bouzidi recommande de <strong>ne pas acheter</strong> dans ce cas, même si les autres conditions sont vertes. Un reflux est probable.</p>
+  </details>
+
+  <details>
+    <summary>Money management recommandé</summary>
+    <ul>
+      <li>Risque max <strong>2% du capital par trade</strong></li>
+      <li>Risque max <strong>10% du capital par semaine</strong> (cumulé)</li>
+      <li>Stop-loss <strong>30 pips sous le dernier plat de Kijun-sen</strong></li>
+      <li>Position divisée en 3 lots : limite 1 = premier plat Senkou B, limite 2 = deuxième plat, limite 3 = dernier creux du Kumo</li>
+      <li>À chaque limite atteinte, remonter le stop : L1 → stop à 0, L2 → stop à L1</li>
+    </ul>
+  </details>
+
+  <div class="footer">
+    Données Yahoo Finance · Calculs Ichimoku 9/26/52 · Mise à jour manuelle<br>
+    Cette application ne constitue pas un conseil financier. Trade avec discipline.
+  </div>
+</div>
+
+<script>
+// ============================================================
+// LISTE D'ACTIFS — Personnalisée selon ta demande
+// ============================================================
+const ASSETS = [
+  { symbol: 'EURUSD=X', name: 'EUR/USD', decimals: 4 },
+  { symbol: 'GBPUSD=X', name: 'GBP/USD', decimals: 4 },
+  { symbol: 'USDJPY=X', name: 'USD/JPY', decimals: 2 },
+  { symbol: 'USDCHF=X', name: 'USD/CHF', decimals: 4 },
+  { symbol: 'USDCAD=X', name: 'USD/CAD', decimals: 4 },
+  { symbol: 'AUDUSD=X', name: 'AUD/USD', decimals: 4 },
+  { symbol: 'NZDUSD=X', name: 'NZD/USD', decimals: 4 },
+  { symbol: 'EURGBP=X', name: 'EUR/GBP', decimals: 4 },
+  { symbol: 'EURJPY=X', name: 'EUR/JPY', decimals: 2 },
+  { symbol: 'GBPJPY=X', name: 'GBP/JPY', decimals: 2 },
+  { symbol: 'YM=F',     name: 'Mini Dow Jones', decimals: 0 },
+  { symbol: '^GDAXI',   name: 'DAX 40', decimals: 2 },
+];
+
+// Plusieurs proxies CORS en fallback (si un tombe, on essaie le suivant)
+const CORS_PROXIES = [
+  'https://corsproxy.io/?url=',
+  'https://api.allorigins.win/raw?url=',
+  'https://api.codetabs.com/v1/proxy?quest='
+];
+
+// ============================================================
+// CALCUL ICHIMOKU
+// ============================================================
+function ichimoku(candles) {
+  const n = candles.length;
+  const out = candles.map(c => ({...c, tenkan:null, kijun:null, senkouA:null, senkouB:null, chikou:null}));
+  for (let i = 0; i < n; i++) {
+    if (i >= 8) {
+      const s = candles.slice(i-8, i+1);
+      out[i].tenkan = (Math.max(...s.map(x=>x.high)) + Math.min(...s.map(x=>x.low))) / 2;
+    }
+    if (i >= 25) {
+      const s = candles.slice(i-25, i+1);
+      out[i].kijun = (Math.max(...s.map(x=>x.high)) + Math.min(...s.map(x=>x.low))) / 2;
+    }
+    if (i >= 51) {
+      const s = candles.slice(i-51, i+1);
+      const sb = (Math.max(...s.map(x=>x.high)) + Math.min(...s.map(x=>x.low))) / 2;
+      if (i + 26 < n) out[i+26].senkouB = sb;
+      else out[i].senkouB_future = sb;
+    }
+    if (i >= 25 && out[i].tenkan != null && out[i].kijun != null) {
+      const sa = (out[i].tenkan + out[i].kijun) / 2;
+      if (i + 26 < n) out[i+26].senkouA = sa;
+      else out[i].senkouA_future = sa;
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    if (i + 26 < n) out[i].chikou = candles[i+26].close;
+  }
+  return out;
+}
+
+function analyze(data) {
+  const last = data[data.length-1];
+  const prev = data[data.length-2];
+  if (!last || last.kijun == null || last.tenkan == null) return null;
+  const price = last.close;
+  const sA = last.senkouA, sB = last.senkouB;
+  const kumoTop = (sA != null && sB != null) ? Math.max(sA, sB) : null;
+  const idx26 = data.length - 1 - 26;
+  const chikouFree = idx26 >= 0 ? price > data[idx26].close : false;
+  const conditions = [
+    chikouFree,
+    price > Math.max(last.tenkan, last.kijun),
+    kumoTop != null && price > kumoTop,
+    last.tenkan > last.kijun,
+    (last.senkouA_future || sA) > (last.senkouB_future || sB)
+  ];
+  const score = conditions.filter(Boolean).length;
+  const tkW = Math.abs(last.tenkan - last.kijun);
+  const kW = (sA != null && sB != null) ? Math.abs(sA - sB) : 0;
+  const anomaly = kW > 0 && tkW > kW;
+  let verdict;
+  if (score === 5 && !anomaly) verdict = 'BUY_STRONG';
+  else if (score >= 3 && !anomaly) verdict = 'WATCH';
+  else if (score <= 1) verdict = 'AVOID';
+  else verdict = 'NEUTRAL';
+  return { score, verdict, anomaly };
+}
+
+// ============================================================
+// API YAHOO FINANCE avec fallback de proxies
+// ============================================================
+async function fetchCandles(symbol, interval, range) {
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
+  let lastErr;
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const url = proxy + encodeURIComponent(yahooUrl);
+      const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (!data.chart || !data.chart.result || !data.chart.result[0]) throw new Error('Pas de données');
+      const r = data.chart.result[0];
+      const ts = r.timestamp || [];
+      const q = r.indicators.quote[0];
+      const candles = ts.map((t, i) => ({
+        date: new Date(t * 1000),
+        open: q.open[i],
+        high: q.high[i],
+        low: q.low[i],
+        close: q.close[i]
+      })).filter(c => c.close != null && c.high != null && c.low != null);
+      return candles;
+    } catch (e) {
+      lastErr = e;
+      continue;
+    }
+  }
+  throw lastErr || new Error('Tous les proxies ont échoué');
+}
+
+// ============================================================
+// AFFICHAGE
+// ============================================================
+function badgeHTML(verdict, anomaly, confluence) {
+  if (confluence) return '<span class="badge badge-confluence">🚀 CONFLUENCE</span>';
+  const map = {
+    BUY_STRONG: ['badge-buy', '🟢 ACHETER'],
+    WATCH: ['badge-watch', '🟡 SURVEILLER'],
+    NEUTRAL: ['badge-neutral', '⚪ NEUTRE'],
+    AVOID: ['badge-avoid', '🔴 ÉVITER']
+  };
+  const [cls, label] = map[verdict] || map.NEUTRAL;
+  const warn = anomaly ? '<span class="anomaly">⚠️</span>' : '';
+  return `<span class="badge ${cls}">${label}</span>${warn}`;
+}
+
+function emptyBadge() {
+  return '<span class="badge badge-neutral">⏳</span>';
+}
+
+function renderRow(asset, result) {
+  if (!result || result.loading) {
+    return `<tr id="row-${asset.symbol}">
+      <td>
+        <div class="ticker">${asset.name}</div>
+        <div class="conditions">${asset.symbol}</div>
+      </td>
+      <td colSpan="6" class="loading">${result?.error ? `<span class="error">⚠ ${result.error}</span>` : '⏳ Chargement…'}</td>
+    </tr>`;
+  }
+  const { price, change, daily, weekly, confluence } = result;
+  const changeCls = change >= 0 ? 'pos' : 'neg';
+  return `<tr id="row-${asset.symbol}">
+    <td>
+      <div class="ticker">${asset.name}</div>
+      <div class="conditions">${asset.symbol}</div>
+    </td>
+    <td class="right">${price != null ? price.toFixed(asset.decimals) : '—'}</td>
+    <td class="right ${changeCls}">${change != null ? (change >= 0 ? '+' : '') + change.toFixed(2) + '%' : '—'}</td>
+    <td class="center">${weekly ? badgeHTML(weekly.verdict, weekly.anomaly) : emptyBadge()}</td>
+    <td class="center">${daily ? badgeHTML(daily.verdict, daily.anomaly) : emptyBadge()}</td>
+    <td class="center"><strong>${daily ? daily.score + '/5' : '—'}</strong></td>
+    <td class="center">${daily ? badgeHTML(daily.verdict, daily.anomaly, confluence) : emptyBadge()}</td>
+  </tr>`;
+}
+
+function updateStats(results) {
+  const arr = Object.values(results).filter(r => r && !r.loading && !r.error);
+  document.getElementById('totalCount').textContent = arr.length;
+  document.getElementById('confluenceCount').textContent = arr.filter(r => r.confluence).length;
+  document.getElementById('buyCount').textContent = arr.filter(r => r.daily?.verdict === 'BUY_STRONG').length;
+  document.getElementById('avoidCount').textContent = arr.filter(r => r.daily?.verdict === 'AVOID').length;
+}
+
+function renderAll(results) {
+  // Tri : confluence en premier, puis par verdict
+  const order = { BUY_STRONG: 0, WATCH: 1, NEUTRAL: 2, AVOID: 3 };
+  const sorted = [...ASSETS].sort((a, b) => {
+    const ra = results[a.symbol], rb = results[b.symbol];
+    if (!ra || !rb) return 0;
+    if (ra.confluence && !rb.confluence) return -1;
+    if (!ra.confluence && rb.confluence) return 1;
+    return (order[ra.daily?.verdict] ?? 9) - (order[rb.daily?.verdict] ?? 9);
+  });
+  document.getElementById('tableBody').innerHTML = sorted.map(a => renderRow(a, results[a.symbol])).join('');
+  updateStats(results);
+}
+
+// ============================================================
+// LANCEMENT
+// ============================================================
+const results = {};
+
+async function analyzeOne(asset) {
+  results[asset.symbol] = { loading: true };
+  renderAll(results);
+  try {
+    const [daily, weekly] = await Promise.all([
+      fetchCandles(asset.symbol, '1d', '1y'),
+      fetchCandles(asset.symbol, '1wk', '5y')
+    ]);
+    const dSig = analyze(ichimoku(daily));
+    const wSig = analyze(ichimoku(weekly));
+    const price = daily[daily.length-1].close;
+    const prevPrice = daily[daily.length-2]?.close || price;
+    const change = ((price - prevPrice) / prevPrice) * 100;
+    const confluence = dSig?.verdict === 'BUY_STRONG' && wSig?.verdict === 'BUY_STRONG';
+    results[asset.symbol] = { price, change, daily: dSig, weekly: wSig, confluence };
+  } catch (e) {
+    results[asset.symbol] = { error: e.message };
+  }
+  renderAll(results);
+}
+
+async function runAnalysis() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyse en cours…';
+  document.getElementById('updateInfo').textContent = 'Analyse en cours, patience (1-2 min)…';
+  // Marquer tous en chargement
+  ASSETS.forEach(a => { results[a.symbol] = { loading: true }; });
+  renderAll(results);
+  // Lancer en parallèle par batch de 3 pour pas saturer
+  for (let i = 0; i < ASSETS.length; i += 3) {
+    const batch = ASSETS.slice(i, i + 3);
+    await Promise.all(batch.map(analyzeOne));
+  }
+  const now = new Date();
+  document.getElementById('updateInfo').textContent = '✓ Dernière analyse : ' + now.toLocaleString('fr-FR');
+  btn.disabled = false;
+  btn.textContent = '↻ Analyser tous les actifs';
+}
+
+// Lancement auto au chargement
+window.addEventListener('load', () => {
+  setTimeout(runAnalysis, 500);
+});
+</script>
+</body>
+</html>
