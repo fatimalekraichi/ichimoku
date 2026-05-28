@@ -265,11 +265,39 @@
           <input type="number" id="buyL3" step="any" placeholder="L3">
         </div>
       </div>
+      <div class="field"><label>Frais de transaction (dans la devise de cotation)</label><input type="number" id="buyFees" step="any" placeholder="0" value="0"><div class="hint" id="buyFeesHint">Commission de ton courtier pour ce trade.</div></div>
       <div class="field"><label>Note</label><textarea id="buyNote" rows="2" placeholder="Contexte de l'achat…"></textarea></div>
       <div class="recap" id="buyRecap"></div>
       <div class="modal-actions">
         <button class="btn-ghost" onclick="closeBuy()">Annuler</button>
         <button class="btn" style="background:#5D8F6B" onclick="confirmBuy()">Confirmer l'achat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE MODIFIER -->
+<div class="modal-bg" id="editModal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="editTitle">Modifier la position</h3><div class="sub">Ajuste les niveaux puis reporte-les sur ta plateforme (IB)</div></div>
+    <div class="modal-body">
+      <div class="grid2">
+        <div class="field"><label>Quantité</label><input type="number" id="editQty" step="any"></div>
+        <div class="field"><label>Prix d'entrée</label><input type="number" id="editEntry" step="any"></div>
+      </div>
+      <div class="field"><label>Stop-loss</label><input type="number" id="editStop" step="any"></div>
+      <div class="field"><label>Limites</label>
+        <div class="grid3">
+          <input type="number" id="editL1" step="any" placeholder="L1">
+          <input type="number" id="editL2" step="any" placeholder="L2">
+          <input type="number" id="editL3" step="any" placeholder="L3">
+        </div>
+      </div>
+      <div class="field"><label>Frais (devise de cotation)</label><input type="number" id="editFees" step="any"></div>
+      <div class="field"><label>Note</label><textarea id="editNote" rows="2"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeEdit()">Annuler</button>
+        <button class="btn" onclick="confirmEdit()">Enregistrer</button>
       </div>
     </div>
   </div>
@@ -591,6 +619,8 @@ function openTrade(symbol, dir) {
   document.getElementById('buyL1').value=l1.toFixed(a.decimals);
   document.getElementById('buyL2').value=l2.toFixed(a.decimals);
   document.getElementById('buyL3').value=l3.toFixed(a.decimals);
+  document.getElementById('buyFees').value=0;
+  document.getElementById('buyFeesHint').textContent='Commission de ton courtier, en '+a.quote+' (laisse 0 si inconnu).';
   document.getElementById('buyNote').value='';
   document.querySelector('#buyModal .modal-actions .btn').style.background=dir==='long'?'#5D8F6B':'#B85547';
   document.querySelector('#buyModal .modal-actions .btn').textContent=dir==='long'?'Confirmer l\'achat':'Confirmer la vente';
@@ -650,6 +680,8 @@ function confirmBuy() {
     l1:parseFloat(document.getElementById('buyL1').value),
     l2:parseFloat(document.getElementById('buyL2').value),
     l3:parseFloat(document.getElementById('buyL3').value),
+    fees:parseFloat(document.getElementById('buyFees').value)||0,
+    actL1:true, actL2:true, actL3:true,
     note:document.getElementById('buyNote').value
   });
   save(LS.positions,positions); cloudSave();
@@ -671,10 +703,12 @@ function renderPortfolio() {
     const dir=p.dir||'long';
     const quote=p.quote||'EUR';
     const rate=rateFor(quote);
+    const fees=p.fees||0;
     const r=results[p.symbol];
     const cur=r&&r.price!=null?r.price:p.entry;
-    // P&L en devise de cotation puis converti en EUR
-    const plQuote=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+    // P&L en devise de cotation, frais déduits, puis converti en EUR
+    const plQuoteBrut=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
+    const plQuote=plQuoteBrut-fees;
     const plEUR=plQuote/rate;
     const plPct=dir==='long'?((cur-p.entry)/p.entry)*100:((p.entry-cur)/p.entry)*100;
     const days=Math.floor((Date.now()-new Date(p.date).getTime())/86400000);
@@ -693,31 +727,70 @@ function renderPortfolio() {
     }
     if(dir==='long'&&cur<=p.stop) alerts.push('⛔ Stop-loss touché');
     if(dir==='short'&&cur>=p.stop) alerts.push('⛔ Stop-loss touché');
-    if(plPct>=20) alerts.push('🎯 +20% atteint');
+    // niveau atteint, en ne comptant que les limites ACTIVES
+    const aL1=p.actL1!==false, aL2=p.actL2!==false, aL3=p.actL3!==false;
     let lvl=0;
-    if(dir==='long'){ if(cur>=p.l1)lvl=1; if(cur>=p.l2)lvl=2; if(cur>=p.l3)lvl=3; }
-    else { if(cur<=p.l1)lvl=1; if(cur<=p.l2)lvl=2; if(cur<=p.l3)lvl=3; }
+    if(dir==='long'){ if(aL1&&cur>=p.l1)lvl=1; if(aL2&&cur>=p.l2)lvl=2; if(aL3&&cur>=p.l3)lvl=3; }
+    else { if(aL1&&cur<=p.l1)lvl=1; if(aL2&&cur<=p.l2)lvl=2; if(aL3&&cur<=p.l3)lvl=3; }
     const prog=dir==='long'
       ? Math.min(100,Math.max(0,((cur-p.entry)/(p.l3-p.entry))*100))
       : Math.min(100,Math.max(0,((p.entry-cur)/(p.entry-p.l3))*100));
     const plc=plPct>=0?'pos':'neg';
     const dirBadge=dir==='long'?'<span class="badge badge-buy" style="font-size:11px">LONG</span>':'<span class="badge badge-avoid" style="font-size:11px">SHORT</span>';
     const sizeStr=p.symbol.includes('=X')?(p.qty/100000).toFixed(3)+' lot':p.qty+' u.';
+
+    // ===== STOP SUIVEUR : deux suggestions =====
+    let stopSuggest='';
+    if(r&&r.daily&&r.daily.kijun!=null){
+      const a=ASSETS.find(x=>x.symbol===p.symbol);
+      const pip=a?a.pip:0.0001;
+      // Suggestion A : règle des 3 lots (selon niveau atteint)
+      let stopA=null, labelA='';
+      if(lvl>=2){ stopA=p.l1; labelA='L2 atteinte → stop au niveau L1'; }
+      else if(lvl>=1){ stopA=p.entry; labelA='L1 atteinte → stop au point d\'entrée (0 risque)'; }
+      // Suggestion B : suiveur Kijun (30 pips sous/au-dessus du Kijun actuel)
+      const stopB=dir==='long'?r.daily.kijun-30*pip:r.daily.kijun+30*pip;
+      const labelB='Suiveur Kijun (30 pips '+(dir==='long'?'sous':'au-dessus')+' le Kijun actuel)';
+      // On ne propose que si c'est une amélioration (stop qui se resserre dans le bon sens)
+      const better=(v)=> dir==='long' ? v>p.stop : v<p.stop;
+      let lines=[];
+      if(stopA!=null && better(stopA)) lines.push(`<div>• <strong>${stopA.toFixed(p.decimals)}</strong> — ${labelA}</div>`);
+      if(better(stopB)) lines.push(`<div>• <strong>${stopB.toFixed(p.decimals)}</strong> — ${labelB}</div>`);
+      if(lines.length){
+        stopSuggest=`<div class="alert-box" style="background:#E8F0FA; border-left-color:#5B7DB1; color:#1B2845;">
+          📈 <strong>Stop suiveur suggéré</strong> (stop actuel : ${p.stop.toFixed(p.decimals)})<br>${lines.join('')}
+          <div style="margin-top:6px; font-style:italic;">👉 Pour appliquer, modifie ton stop ici (bouton Modifier) ET sur ta plateforme de trading (IB).</div>
+        </div>`;
+      }
+    }
+
+    // Cases à cocher limites actives
+    const limChk=`<div class="sub" style="margin-top:6px; display:flex; gap:14px; flex-wrap:wrap;">
+      <label><input type="checkbox" ${aL1?'checked':''} onchange="toggleLimit('${p.id}','actL1',this.checked)"> L1 ${p.l1.toFixed(p.decimals)}</label>
+      <label><input type="checkbox" ${aL2?'checked':''} onchange="toggleLimit('${p.id}','actL2',this.checked)"> L2 ${p.l2.toFixed(p.decimals)}</label>
+      <label><input type="checkbox" ${aL3?'checked':''} onchange="toggleLimit('${p.id}','actL3',this.checked)"> L3 ${p.l3.toFixed(p.decimals)}</label>
+    </div>`;
+
     return `<div class="pos-card">
       <div class="pos-head">
         <div><span class="ticker" style="font-size:17px">${p.name}</span> ${dirBadge} <span class="sub">${p.symbol} · ${quote}</span>
-          <div class="sub">Entré le ${new Date(p.date).toLocaleDateString('fr-FR')} · ${days}j · ${sizeStr}</div></div>
+          <div class="sub">Entré le ${new Date(p.date).toLocaleDateString('fr-FR')} · ${days}j · ${sizeStr}${fees>0?' · frais '+fees+' '+quote:''}</div></div>
         <div style="text-align:right">
           <div class="sub">Cours ${cur.toFixed(p.decimals)}</div>
           <div class="${plc}" style="font-size:18px">${plPct>=0?'+':''}${plPct.toFixed(2)}%</div>
-          <div class="${plc}" style="font-size:14px"><strong>${plEUR>=0?'+':''}${plEUR.toFixed(2)} €</strong></div>
+          <div class="${plc}" style="font-size:14px"><strong>${plEUR>=0?'+':''}${plEUR.toFixed(2)} €</strong>${fees>0?' <span class="sub">(frais inclus)</span>':''}</div>
         </div>
       </div>
       <div class="progress"><div class="progress-fill" style="width:${prog}%"></div></div>
-      <div class="sub" style="margin-top:4px">Entrée ${p.entry.toFixed(p.decimals)} · Stop ${p.stop.toFixed(p.decimals)} · L1 ${p.l1.toFixed(p.decimals)} · L2 ${p.l2.toFixed(p.decimals)} · L3 ${p.l3.toFixed(p.decimals)} ${lvl>0?'· 🎯 L'+lvl+' atteinte':''}</div>
+      <div class="sub" style="margin-top:4px">Entrée ${p.entry.toFixed(p.decimals)} · Stop ${p.stop.toFixed(p.decimals)} ${lvl>0?'· 🎯 L'+lvl+' atteinte':''}</div>
+      ${limChk}
       ${alerts.length?`<div class="alert-box">${alerts.join('<br>')}</div>`:''}
+      ${stopSuggest}
       ${p.note?`<div class="sub" style="margin-top:6px">📝 ${p.note}</div>`:''}
-      <div style="margin-top:10px"><button class="btn-sell" onclick="sellPosition('${p.id}')">${dir==='long'?'Vendre (clôturer)':'Racheter (clôturer)'}</button></div>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="openEdit('${p.id}')">✏️ Modifier</button>
+        <button class="btn-sell" onclick="sellPosition('${p.id}')">${dir==='long'?'Vendre (clôturer)':'Racheter (clôturer)'}</button>
+      </div>
     </div>`;
   }).join('');
   const pct=settings.capital>0?(totPLeur/settings.capital)*100:0;
@@ -726,6 +799,40 @@ function renderPortfolio() {
   const plEl=document.getElementById('pfPL'); plEl.textContent=(totPLeur>=0?'+':'')+totPLeur.toFixed(2)+'€'; plEl.style.color=totPLeur>=0?'#5D8F6B':'#B85547';
   const pctEl=document.getElementById('pfPct'); pctEl.textContent=(pct>=0?'+':'')+pct.toFixed(2)+'%'; pctEl.style.color=pct>=0?'#5D8F6B':'#B85547';
   updatePill();
+}
+function toggleLimit(id, key, val) {
+  const p=positions.find(x=>x.id===id); if(!p) return;
+  p[key]=val; save(LS.positions,positions); cloudSave(); renderPortfolio();
+}
+// ===== MODIFIER UNE POSITION =====
+let editId=null;
+function openEdit(id) {
+  const p=positions.find(x=>x.id===id); if(!p) return;
+  editId=id;
+  document.getElementById('editTitle').textContent='Modifier '+p.name;
+  document.getElementById('editQty').value=p.qty;
+  document.getElementById('editEntry').value=p.entry;
+  document.getElementById('editStop').value=p.stop;
+  document.getElementById('editL1').value=p.l1;
+  document.getElementById('editL2').value=p.l2;
+  document.getElementById('editL3').value=p.l3;
+  document.getElementById('editFees').value=p.fees||0;
+  document.getElementById('editNote').value=p.note||'';
+  document.getElementById('editModal').classList.add('show');
+}
+function closeEdit(){ document.getElementById('editModal').classList.remove('show'); }
+function confirmEdit() {
+  const p=positions.find(x=>x.id===editId); if(!p) return;
+  p.qty=parseFloat(document.getElementById('editQty').value)||p.qty;
+  p.entry=parseFloat(document.getElementById('editEntry').value)||p.entry;
+  p.stop=parseFloat(document.getElementById('editStop').value)||p.stop;
+  p.l1=parseFloat(document.getElementById('editL1').value)||p.l1;
+  p.l2=parseFloat(document.getElementById('editL2').value)||p.l2;
+  p.l3=parseFloat(document.getElementById('editL3').value)||p.l3;
+  p.fees=parseFloat(document.getElementById('editFees').value)||0;
+  p.note=document.getElementById('editNote').value;
+  save(LS.positions,positions); cloudSave();
+  closeEdit(); renderPortfolio();
 }
 function updatePill(){
   const pill=document.getElementById('posPill');
@@ -741,8 +848,9 @@ function sellPosition(id) {
   const cur=r&&r.price!=null?r.price:p.entry;
   if(!confirm(`Clôturer ${p.name} (${dir==='long'?'achat':'vente'}) à ${cur.toFixed(p.decimals)} ?`)) return;
   const reason=prompt('Raison de la clôture ?','Signal de sortie')||'Clôture';
-  const plQuote=dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty;
-  const realizedPL=plQuote/rate; // converti en EUR
+  const fees=p.fees||0;
+  const plQuote=(dir==='long'?(cur-p.entry)*p.qty:(p.entry-cur)*p.qty)-fees;
+  const realizedPL=plQuote/rate; // converti en EUR, frais déduits
   const realizedPct=dir==='long'?((cur-p.entry)/p.entry)*100:((p.entry-cur)/p.entry)*100;
   closed.push({...p, dir, quote, exitPrice:cur, exitDate:new Date().toISOString(), realizedPL, realizedPct, reason});
   positions=positions.filter(x=>x.id!==id);
