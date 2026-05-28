@@ -92,6 +92,8 @@
   .footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid #EBE5D4; font-size: 12px; color: #7A8B70; text-align: center; line-height: 1.6; }
   .empty { text-align: center; padding: 30px; color: #BFB298; }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div class="container">
@@ -188,21 +190,22 @@
       </div>
     </div>
 
-    <h2 class="section-title">🔄 Synchroniser entre appareils</h2>
+    <h2 class="section-title">☁️ Synchronisation automatique</h2>
     <div class="info-box">
-      Pour transférer tes positions de l'iPhone vers le Mac (ou l'inverse) :<br>
-      <strong>1.</strong> Sur l'appareil source, clique « Copier ma sauvegarde »<br>
-      <strong>2.</strong> Envoie-toi le texte (par mail ou note)<br>
-      <strong>3.</strong> Sur l'autre appareil, colle-le et clique « Restaurer »
+      Tes positions, ton historique et tes réglages sont <strong>synchronisés automatiquement</strong> entre tous tes appareils (iPhone, iPad, Mac) via le cloud. Aucune action nécessaire — il suffit d'ouvrir la même adresse sur chaque appareil.
+      <div id="syncStatus" style="margin-top:8px; font-weight:600;">☁️ Connexion au cloud…</div>
     </div>
-    <div class="table-wrap" style="padding:18px;">
-      <button class="btn" onclick="exportData()">📋 Copier ma sauvegarde</button>
-      <div class="field" style="margin-top:14px;">
-        <label>Coller une sauvegarde ici puis Restaurer</label>
-        <textarea id="importBox" rows="3" placeholder="Colle ton code de sauvegarde…"></textarea>
+    <details>
+      <summary>Sauvegarde manuelle (secours)</summary>
+      <div style="margin-top:12px;">
+        <button class="btn" onclick="exportData()">📋 Copier ma sauvegarde</button>
+        <div class="field" style="margin-top:14px;">
+          <label>Coller une sauvegarde ici puis Restaurer</label>
+          <textarea id="importBox" rows="3" placeholder="Colle ton code de sauvegarde…"></textarea>
+        </div>
+        <button class="btn-ghost" onclick="importData()">♻️ Restaurer</button>
       </div>
-      <button class="btn-ghost" onclick="importData()">♻️ Restaurer</button>
-    </div>
+    </details>
 
     <h2 class="section-title">📚 Règles El Bouzidi</h2>
     <details><summary>Les 5 conditions de tendance haussière</summary>
@@ -302,7 +305,7 @@ const CORS_PROXIES = [
 ];
 
 // ============================================================
-// STOCKAGE
+// STOCKAGE (local + Firebase pour la synchro multi-appareils)
 // ============================================================
 const LS = {
   positions: 'ichi_positions',
@@ -311,6 +314,73 @@ const LS = {
 };
 function load(key, def) { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : def; } catch(e){ return def; } }
 function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){} }
+
+// --- Configuration Firebase (synchro) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyA1JexPcogJxch7ZzP-3PY6nAjn84UU-F8",
+  authDomain: "ichimoku-5c4d5.firebaseapp.com",
+  projectId: "ichimoku-5c4d5",
+  storageBucket: "ichimoku-5c4d5.firebasestorage.app",
+  messagingSenderId: "382516493920",
+  appId: "1:382516493920:web:8325d104155cf4ab974d05"
+};
+let db = null, fbReady = false, fbSyncing = false;
+const FB_DOC = 'data/main'; // un seul document partagé entre tes appareils
+
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  fbReady = true;
+} catch(e) { console.warn('Firebase non initialisé:', e); }
+
+// Écrit l'état complet dans le cloud (avec petit anti-rebond)
+let saveTimer = null;
+function cloudSave() {
+  if (!fbReady) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    db.doc(FB_DOC).set({ positions, closed, settings, updatedAt: Date.now() })
+      .then(()=>{ const s=document.getElementById('syncStatus'); if(s){s.textContent='☁️ Synchronisé '+new Date().toLocaleTimeString('fr-FR');} })
+      .catch(e=>{ const s=document.getElementById('syncStatus'); if(s){s.textContent='⚠️ Erreur de synchro';} console.warn(e); });
+  }, 600);
+}
+
+// Charge l'état depuis le cloud au démarrage, puis écoute les changements en temps réel
+function cloudInit() {
+  if (!fbReady) { afterDataReady(); return; }
+  db.doc(FB_DOC).get().then(snap => {
+    if (snap.exists) {
+      const d = snap.data();
+      if (d.positions) positions = d.positions;
+      if (d.closed) closed = d.closed;
+      if (d.settings) settings = d.settings;
+      // recopie en local
+      save(LS.positions,positions); save(LS.closed,closed); save(LS.settings,settings);
+    } else {
+      // Première fois : on pousse ce qu'on a en local vers le cloud
+      cloudSave();
+    }
+    afterDataReady();
+    // Écoute temps réel : si un autre appareil modifie, on se met à jour
+    db.doc(FB_DOC).onSnapshot(snap => {
+      if (fbSyncing) return;
+      if (!snap.exists || snap.metadata.hasPendingWrites) return;
+      const d = snap.data();
+      let changed = false;
+      if (JSON.stringify(d.positions||[])!==JSON.stringify(positions)) { positions=d.positions||[]; changed=true; }
+      if (JSON.stringify(d.closed||[])!==JSON.stringify(closed)) { closed=d.closed||[]; changed=true; }
+      if (JSON.stringify(d.settings||{})!==JSON.stringify(settings)) { settings=d.settings||settings; changed=true; }
+      if (changed) {
+        save(LS.positions,positions); save(LS.closed,closed); save(LS.settings,settings);
+        document.getElementById('setCapital').value=settings.capital;
+        document.getElementById('setRisk').value=settings.risk;
+        document.getElementById('setLeverage').value=settings.leverage||30;
+        renderPortfolio(); renderHistory(); updatePill();
+        const s=document.getElementById('syncStatus'); if(s){s.textContent='☁️ Mis à jour depuis un autre appareil';}
+      }
+    });
+  }).catch(e=>{ console.warn('Lecture cloud échouée:', e); afterDataReady(); });
+}
 
 let positions = load(LS.positions, []);
 let closed = load(LS.closed, []);
@@ -582,7 +652,7 @@ function confirmBuy() {
     l3:parseFloat(document.getElementById('buyL3').value),
     note:document.getElementById('buyNote').value
   });
-  save(LS.positions,positions);
+  save(LS.positions,positions); cloudSave();
   closeBuy(); renderPortfolio(); updatePill();
   switchTab('portfolio');
 }
@@ -676,7 +746,7 @@ function sellPosition(id) {
   const realizedPct=dir==='long'?((cur-p.entry)/p.entry)*100:((p.entry-cur)/p.entry)*100;
   closed.push({...p, dir, quote, exitPrice:cur, exitDate:new Date().toISOString(), realizedPL, realizedPct, reason});
   positions=positions.filter(x=>x.id!==id);
-  save(LS.positions,positions); save(LS.closed,closed);
+  save(LS.positions,positions); save(LS.closed,closed); cloudSave();
   renderPortfolio(); renderHistory(); updatePill();
 }
 
@@ -718,7 +788,7 @@ function saveSettings() {
   settings.capital=parseFloat(document.getElementById('setCapital').value)||1000;
   settings.risk=parseFloat(document.getElementById('setRisk').value)||2;
   settings.leverage=parseFloat(document.getElementById('setLeverage').value)||30;
-  save(LS.settings,settings);
+  save(LS.settings,settings); cloudSave();
 }
 function exportData() {
   const payload=btoa(unescape(encodeURIComponent(JSON.stringify({positions,closed,settings}))));
@@ -733,7 +803,7 @@ function importData() {
     if(data.positions) positions=data.positions;
     if(data.closed) closed=data.closed;
     if(data.settings) settings=data.settings;
-    save(LS.positions,positions); save(LS.closed,closed); save(LS.settings,settings);
+    save(LS.positions,positions); save(LS.closed,closed); save(LS.settings,settings); cloudSave();
     document.getElementById('setCapital').value=settings.capital;
     document.getElementById('setRisk').value=settings.risk;
     renderPortfolio(); renderHistory(); updatePill();
@@ -742,7 +812,7 @@ function importData() {
 }
 function resetAll() {
   if(!confirm('Effacer toutes les positions et l\'historique ?')) return;
-  positions=[]; closed=[]; save(LS.positions,positions); save(LS.closed,closed);
+  positions=[]; closed=[]; save(LS.positions,positions); save(LS.closed,closed); cloudSave();
   renderPortfolio(); renderHistory(); updatePill();
 }
 
@@ -757,10 +827,15 @@ function switchTab(tab) {
 // ============================================================
 // INIT
 // ============================================================
-document.getElementById('setCapital').value=settings.capital;
-document.getElementById('setRisk').value=settings.risk;
-document.getElementById('setLeverage').value=settings.leverage||30;
-renderPortfolio(); renderHistory(); updatePill();
+function afterDataReady() {
+  document.getElementById('setCapital').value=settings.capital;
+  document.getElementById('setRisk').value=settings.risk;
+  document.getElementById('setLeverage').value=settings.leverage||30;
+  renderPortfolio(); renderHistory(); updatePill();
+}
+// Affichage immédiat avec les données locales (rapide), puis synchro cloud
+afterDataReady();
+cloudInit();
 window.addEventListener('load',()=>setTimeout(runAnalysis,400));
 </script>
 </body>
