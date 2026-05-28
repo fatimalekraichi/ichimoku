@@ -3,265 +3,288 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Screener Ichimoku — Méthode El Bouzidi</title>
+<title>Ichimoku — Screener & Portefeuille (El Bouzidi)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    background: #F5F1E8;
-    color: #1B2845;
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
+    background: #F5F1E8; color: #1B2845; min-height: 100vh; -webkit-font-smoothing: antialiased;
   }
-  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-  header {
-    border-bottom: 1px solid #EBE5D4;
-    padding-bottom: 20px;
-    margin-bottom: 24px;
-  }
-  h1 { font-size: 28px; font-weight: 700; color: #1B2845; }
-  .subtitle { font-size: 12px; color: #7A8B70; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
-  .controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-  .update-info { font-size: 13px; color: #7A8B70; }
-  .btn {
-    background: #1B2845;
-    color: #F5F1E8;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  header { border-bottom: 1px solid #EBE5D4; padding-bottom: 14px; margin-bottom: 16px; }
+  h1 { font-size: 24px; font-weight: 700; }
+  .subtitle { font-size: 11px; color: #7A8B70; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
+  /* Onglets */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; overflow-x: auto; border-bottom: 1px solid #EBE5D4; }
+  .tab { padding: 10px 16px; font-size: 14px; font-weight: 600; color: #7A8B70; background: none; border: none;
+         border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+  .tab.active { color: #1B2845; border-bottom-color: #1B2845; }
+  .tab .pill { background: #C66B4A; color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; margin-left: 6px; }
+  .pane { display: none; }
+  .pane.active { display: block; }
+  /* Boutons */
+  .btn { background: #1B2845; color: #F5F1E8; border: none; padding: 9px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
   .btn:hover { opacity: 0.9; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
-  }
-  .stat-card {
-    background: white;
-    border: 1px solid #EBE5D4;
-    border-radius: 8px;
-    padding: 14px;
-  }
-  .stat-label { font-size: 11px; color: #7A8B70; text-transform: uppercase; letter-spacing: 1.5px; }
-  .stat-value { font-size: 28px; font-weight: 700; color: #1B2845; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .table-wrap {
-    background: white;
-    border: 1px solid #EBE5D4;
-    border-radius: 8px;
-    overflow-x: auto;
-  }
+  .btn-buy { background: #5D8F6B; color: white; padding: 6px 14px; border-radius: 5px; font-size: 13px; border: none; cursor: pointer; font-weight: 600; }
+  .btn-sell { background: #B85547; color: white; padding: 6px 14px; border-radius: 5px; font-size: 13px; border: none; cursor: pointer; font-weight: 600; }
+  .btn-ghost { background: none; border: 1px solid #1B2845; color: #1B2845; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .update-info { font-size: 12px; color: #7A8B70; }
+  /* Cartes stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .stat-card { background: white; border: 1px solid #EBE5D4; border-radius: 8px; padding: 12px; }
+  .stat-label { font-size: 10px; color: #7A8B70; text-transform: uppercase; letter-spacing: 1.5px; }
+  .stat-value { font-size: 26px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  /* Tableau */
+  .table-wrap { background: white; border: 1px solid #EBE5D4; border-radius: 8px; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   thead { background: #EBE5D4; }
-  th {
-    text-align: left;
-    padding: 14px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #7A8B70;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 1px solid #d4c8a8;
-  }
-  th.center { text-align: center; }
-  th.right { text-align: right; }
-  td {
-    padding: 14px 12px;
-    border-bottom: 1px solid #F0EBD9;
-    font-variant-numeric: tabular-nums;
-  }
-  td.center { text-align: center; }
-  td.right { text-align: right; }
+  th { text-align: left; padding: 12px 10px; font-size: 10px; font-weight: 600; color: #7A8B70; text-transform: uppercase; letter-spacing: 1px; }
+  th.center, td.center { text-align: center; }
+  th.right, td.right { text-align: right; }
+  td { padding: 12px 10px; border-bottom: 1px solid #F0EBD9; font-variant-numeric: tabular-nums; }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: #FAF7EE; }
   .ticker { font-weight: 600; }
-  .name { color: #1B2845; }
-  .badge {
-    display: inline-block;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    text-align: center;
-    white-space: nowrap;
-  }
+  .sub { color: #7A8B70; font-size: 11px; }
+  .badge { display: inline-block; padding: 5px 11px; border-radius: 18px; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .badge-buy { background: #5D8F6B; color: white; }
   .badge-watch { background: #D4C77A; color: #1B2845; }
   .badge-neutral { background: #BFB298; color: #1B2845; }
   .badge-avoid { background: #B85547; color: white; }
-  .badge-confluence {
-    background: linear-gradient(135deg, #5D8F6B, #4A7355);
-    color: white;
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+  .badge-confluence { background: linear-gradient(135deg, #5D8F6B, #4A7355); color: white; animation: pulse 2s ease-in-out infinite; }
+  .badge-sell { background: #B85547; color: white; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
   .pos { color: #5D8F6B; font-weight: 600; }
   .neg { color: #B85547; font-weight: 600; }
   .loading { color: #BFB298; font-style: italic; font-size: 13px; }
   .error { color: #B85547; font-size: 12px; }
-  .anomaly { background: #FFF3CD; color: #856404; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-left: 4px; }
-  .info-box {
-    background: #FFF9D9;
-    border-left: 4px solid #D4C77A;
-    padding: 12px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    margin-bottom: 20px;
-    line-height: 1.6;
-  }
-  .footer {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #EBE5D4;
-    font-size: 12px;
-    color: #7A8B70;
-    text-align: center;
-  }
-  details {
-    background: white;
-    border: 1px solid #EBE5D4;
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-  }
-  details summary { cursor: pointer; font-weight: 600; color: #1B2845; }
-  details[open] summary { margin-bottom: 8px; }
-  details p { font-size: 13px; line-height: 1.6; color: #1B2845; }
+  .warn-icon { background: #FFF3CD; color: #856404; padding: 2px 5px; border-radius: 4px; font-size: 11px; margin-left: 3px; }
+  .info-box { background: #FFF9D9; border-left: 4px solid #D4C77A; padding: 11px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
+  /* Modale */
+  .modal-bg { position: fixed; inset: 0; background: rgba(27,40,69,0.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #F5F1E8; border-radius: 10px; max-width: 520px; width: 100%; max-height: 92vh; overflow-y: auto; }
+  .modal-head { padding: 18px; border-bottom: 1px solid #EBE5D4; }
+  .modal-head h3 { font-size: 19px; }
+  .modal-body { padding: 18px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; color: #7A8B70; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .field input, .field textarea { width: 100%; padding: 9px; border: 1px solid #d4c8a8; border-radius: 6px; font-size: 14px; background: white; font-variant-numeric: tabular-nums; }
+  .field .hint { font-size: 11px; color: #7A8B70; margin-top: 3px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .recap { background: #EBE5D4; border-radius: 6px; padding: 12px; font-size: 13px; margin: 14px 0; }
+  .recap .line { display: flex; justify-content: space-between; padding: 3px 0; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions .btn, .modal-actions .btn-ghost { flex: 1; }
+  /* Portefeuille cartes */
+  .pos-card { background: white; border: 1px solid #EBE5D4; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .pos-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .progress { height: 8px; background: #EBE5D4; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; background: #5D8F6B; }
+  .alert-box { background: #FDEBE8; border-left: 3px solid #B85547; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 10px; }
+  .section-title { font-size: 18px; font-weight: 700; margin: 26px 0 12px; }
+  details { background: white; border: 1px solid #EBE5D4; border-radius: 8px; padding: 11px 14px; margin-bottom: 8px; }
+  details summary { cursor: pointer; font-weight: 600; }
   details ul { margin-left: 20px; margin-top: 6px; font-size: 13px; line-height: 1.7; }
-  .section-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #1B2845;
-    margin: 30px 0 14px 0;
-  }
-  .conditions {
-    font-size: 11px;
-    color: #7A8B70;
-    margin-top: 4px;
-  }
+  .footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid #EBE5D4; font-size: 12px; color: #7A8B70; text-align: center; line-height: 1.6; }
+  .empty { text-align: center; padding: 30px; color: #BFB298; }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>Screener Ichimoku</h1>
-    <div class="subtitle">Méthode Khalid El Bouzidi · Forex + Indices</div>
+    <h1>一目均衡表 · Ichimoku</h1>
+    <div class="subtitle">Screener & Portefeuille · Méthode El Bouzidi</div>
   </header>
 
-  <div class="controls">
-    <div class="update-info" id="updateInfo">Cliquez sur "Analyser" pour démarrer</div>
-    <button class="btn" id="refreshBtn" onclick="runAnalysis()">↻ Analyser tous les actifs</button>
+  <div class="tabs">
+    <button class="tab active" data-tab="screener" onclick="switchTab('screener')">📊 Screener</button>
+    <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')">💼 Portefeuille <span class="pill" id="posPill" style="display:none">0</span></button>
+    <button class="tab" data-tab="history" onclick="switchTab('history')">📜 Historique</button>
+    <button class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Réglages</button>
   </div>
 
-  <div class="info-box">
-    <strong>Comment lire ce tableau :</strong> Le verdict combine les signaux journalier et hebdomadaire selon les 5 conditions de tendance haussière d'El Bouzidi. 🚀 <strong>CONFLUENCE</strong> = signal fort confirmé sur les deux échelles (configuration optimale). ⚠️ = anomalie de tendance détectée (zone Tenkan/Kijun plus large que le Kumo → reflux imminent).
+  <!-- ===== SCREENER ===== -->
+  <div class="pane active" id="pane-screener">
+    <div class="controls">
+      <div class="update-info" id="updateInfo">Analyse au démarrage…</div>
+      <button class="btn" id="refreshBtn" onclick="runAnalysis()">↻ Actualiser</button>
+    </div>
+    <div class="info-box">
+      <strong>Le verdict</strong> combine journalier + hebdo selon les 5 conditions El Bouzidi. 🚀 <strong>CONFLUENCE</strong> = signal fort sur les deux échelles. ⚠️ = anomalie de tendance (prudence). Clique <strong>Acheter</strong> pour suivre une position automatiquement.
+    </div>
+    <div class="stats">
+      <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="totalCount">—</div></div>
+      <div class="stat-card"><div class="stat-label">🚀 Confluences</div><div class="stat-value" id="confluenceCount" style="color:#5D8F6B">—</div></div>
+      <div class="stat-card"><div class="stat-label">🟢 Acheter</div><div class="stat-value" id="buyCount" style="color:#5D8F6B">—</div></div>
+      <div class="stat-card"><div class="stat-label">🔴 Éviter</div><div class="stat-value" id="avoidCount" style="color:#B85547">—</div></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Actif</th><th class="right">Cours</th><th class="right">Var %</th>
+          <th class="center">Hebdo</th><th class="center">Journalier</th><th class="center">Score</th>
+          <th class="center">Verdict</th><th class="center">Action</th>
+        </tr></thead>
+        <tbody id="screenerBody">
+          <tr><td colspan="8" class="empty">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <div class="stats">
-    <div class="stat-card">
-      <div class="stat-label">Total actifs</div>
-      <div class="stat-value" id="totalCount">—</div>
+  <!-- ===== PORTEFEUILLE ===== -->
+  <div class="pane" id="pane-portfolio">
+    <div class="stats">
+      <div class="stat-card"><div class="stat-label">Valeur totale</div><div class="stat-value" id="pfValue">—</div></div>
+      <div class="stat-card"><div class="stat-label">Investi</div><div class="stat-value" id="pfCost">—</div></div>
+      <div class="stat-card"><div class="stat-label">P&L total</div><div class="stat-value" id="pfPL">—</div></div>
+      <div class="stat-card"><div class="stat-label">Performance</div><div class="stat-value" id="pfPct">—</div></div>
     </div>
-    <div class="stat-card">
-      <div class="stat-label">🚀 Confluences</div>
-      <div class="stat-value" id="confluenceCount" style="color:#5D8F6B">—</div>
+    <div id="portfolioList"></div>
+  </div>
+
+  <!-- ===== HISTORIQUE ===== -->
+  <div class="pane" id="pane-history">
+    <div class="stats">
+      <div class="stat-card"><div class="stat-label">Trades clôturés</div><div class="stat-value" id="hTotal">0</div></div>
+      <div class="stat-card"><div class="stat-label">Taux de réussite</div><div class="stat-value" id="hWinRate">—</div></div>
+      <div class="stat-card"><div class="stat-label">P&L réalisé</div><div class="stat-value" id="hPL">—</div></div>
+      <div class="stat-card"><div class="stat-label">Gain moyen / Perte moy.</div><div class="stat-value" id="hAvg" style="font-size:16px">—</div></div>
     </div>
-    <div class="stat-card">
-      <div class="stat-label">🟢 Acheter</div>
-      <div class="stat-value" id="buyCount" style="color:#5D8F6B">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">🔴 Éviter</div>
-      <div class="stat-value" id="avoidCount" style="color:#B85547">—</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Sortie</th><th>Actif</th><th class="right">Entrée</th><th class="right">Sortie</th>
+          <th class="right">Qté</th><th class="right">P&L</th><th class="right">%</th><th>Raison</th>
+        </tr></thead>
+        <tbody id="historyBody">
+          <tr><td colspan="8" class="empty">Aucun trade clôturé.</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Actif</th>
-          <th class="right">Cours</th>
-          <th class="right">Var %</th>
-          <th class="center">Hebdo</th>
-          <th class="center">Journalier</th>
-          <th class="center">Score</th>
-          <th class="center">Verdict</th>
-        </tr>
-      </thead>
-      <tbody id="tableBody">
-        <tr><td colSpan="7" style="text-align:center; padding:30px; color:#BFB298;">Cliquez sur "Analyser" pour récupérer les cours et calculer les signaux</td></tr>
-      </tbody>
-    </table>
+  <!-- ===== REGLAGES ===== -->
+  <div class="pane" id="pane-settings">
+    <div class="table-wrap" style="padding:18px;">
+      <div class="field">
+        <label>Capital total (€)</label>
+        <input type="number" id="setCapital" value="1000" onchange="saveSettings()">
+        <div class="hint">Base pour calculer la taille des positions.</div>
+      </div>
+      <div class="field">
+        <label>Risque max par trade (%)</label>
+        <input type="number" id="setRisk" value="2" step="0.5" onchange="saveSettings()">
+        <div class="hint">El Bouzidi : ne jamais risquer plus de 10% du capital par semaine.</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">🔄 Synchroniser entre appareils</h2>
+    <div class="info-box">
+      Pour transférer tes positions de l'iPhone vers le Mac (ou l'inverse) :<br>
+      <strong>1.</strong> Sur l'appareil source, clique « Copier ma sauvegarde »<br>
+      <strong>2.</strong> Envoie-toi le texte (par mail ou note)<br>
+      <strong>3.</strong> Sur l'autre appareil, colle-le et clique « Restaurer »
+    </div>
+    <div class="table-wrap" style="padding:18px;">
+      <button class="btn" onclick="exportData()">📋 Copier ma sauvegarde</button>
+      <div class="field" style="margin-top:14px;">
+        <label>Coller une sauvegarde ici puis Restaurer</label>
+        <textarea id="importBox" rows="3" placeholder="Colle ton code de sauvegarde…"></textarea>
+      </div>
+      <button class="btn-ghost" onclick="importData()">♻️ Restaurer</button>
+    </div>
+
+    <h2 class="section-title">📚 Règles El Bouzidi</h2>
+    <details><summary>Les 5 conditions de tendance haussière</summary>
+      <ul>
+        <li>Chinkou libre (clôture &gt; cours d'il y a 26 périodes)</li>
+        <li>Cours au-dessus de la zone Tenkan/Kijun</li>
+        <li>Cours au-dessus du Kumo</li>
+        <li>Tenkan au-dessus du Kijun</li>
+        <li>Kumo futur haussier (Senkou A &gt; Senkou B)</li>
+      </ul>
+    </details>
+    <details><summary>Money management</summary>
+      <ul>
+        <li>Max 2% de risque par trade, 10% par semaine</li>
+        <li>Stop 30 pips sous le dernier plat de Kijun</li>
+        <li>Position en 3 lots : L1 = 1er palier Senkou B, L2 = 2e, L3 = dernier creux du Kumo</li>
+        <li>À chaque limite : remonter le stop (L1→entrée, L2→L1)</li>
+      </ul>
+    </details>
+    <details><summary>Signaux de vente</summary>
+      <ul>
+        <li>Cassure de Kijun en clôture</li>
+        <li>Sortie du Kumo par le bas</li>
+        <li>Croisement Tenkan/Kijun baissier</li>
+        <li>Anomalie de tendance (zone TK plus large que le Kumo)</li>
+      </ul>
+    </details>
+
+    <div class="table-wrap" style="padding:18px; margin-top:14px;">
+      <button class="btn-ghost" style="border-color:#B85547; color:#B85547;" onclick="resetAll()">⚠️ Tout effacer</button>
+    </div>
   </div>
-
-  <h2 class="section-title">📚 Règles El Bouzidi appliquées</h2>
-
-  <details>
-    <summary>Les 5 conditions de tendance haussière</summary>
-    <ul>
-      <li><strong>Chinkou libre</strong> : la clôture actuelle dépasse celle d'il y a 26 périodes</li>
-      <li><strong>Cours au-dessus de la zone Tenkan/Kijun</strong></li>
-      <li><strong>Cours au-dessus du Kumo</strong> (nuage)</li>
-      <li><strong>Tenkan au-dessus du Kijun</strong> (croisement haussier)</li>
-      <li><strong>Kumo futur haussier</strong> (Senkou A projeté &gt; Senkou B projeté)</li>
-    </ul>
-    <p style="margin-top:8px;">Score 5/5 + signaux confirmés sur hebdo ET journalier = 🚀 <strong>CONFLUENCE</strong> (configuration optimale pour entrer).</p>
-  </details>
-
-  <details>
-    <summary>Anomalie de tendance</summary>
-    <p>Quand la zone Tenkan/Kijun devient plus large que le Kumo, c'est un signal de faiblesse. El Bouzidi recommande de <strong>ne pas acheter</strong> dans ce cas, même si les autres conditions sont vertes. Un reflux est probable.</p>
-  </details>
-
-  <details>
-    <summary>Money management recommandé</summary>
-    <ul>
-      <li>Risque max <strong>2% du capital par trade</strong></li>
-      <li>Risque max <strong>10% du capital par semaine</strong> (cumulé)</li>
-      <li>Stop-loss <strong>30 pips sous le dernier plat de Kijun-sen</strong></li>
-      <li>Position divisée en 3 lots : limite 1 = premier plat Senkou B, limite 2 = deuxième plat, limite 3 = dernier creux du Kumo</li>
-      <li>À chaque limite atteinte, remonter le stop : L1 → stop à 0, L2 → stop à L1</li>
-    </ul>
-  </details>
 
   <div class="footer">
-    Données Yahoo Finance · Calculs Ichimoku 9/26/52 · Mise à jour manuelle<br>
-    Cette application ne constitue pas un conseil financier. Trade avec discipline.
+    Données Yahoo Finance · Ichimoku 9/26/52 · Tes données restent sur ton appareil.<br>
+    Ceci n'est pas un conseil financier. Le trading comporte des risques de perte. Décisions à ta seule responsabilité.
+  </div>
+</div>
+
+<!-- MODALE ACHAT -->
+<div class="modal-bg" id="buyModal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="buyTitle">Acheter</h3><div class="sub" id="buySub"></div></div>
+    <div class="modal-body">
+      <div class="grid2">
+        <div class="field"><label>Quantité</label><input type="number" id="buyQty" step="any"><div class="hint" id="buyQtyHint"></div></div>
+        <div class="field"><label>Prix d'entrée</label><input type="number" id="buyEntry" step="any"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Date</label><input type="date" id="buyDate"></div>
+        <div class="field"><label>Stop-loss (sous Kijun)</label><input type="number" id="buyStop" step="any"></div>
+      </div>
+      <div class="field"><label>Limites (paliers Senkou B)</label>
+        <div class="grid3">
+          <input type="number" id="buyL1" step="any" placeholder="L1">
+          <input type="number" id="buyL2" step="any" placeholder="L2">
+          <input type="number" id="buyL3" step="any" placeholder="L3">
+        </div>
+      </div>
+      <div class="field"><label>Note</label><textarea id="buyNote" rows="2" placeholder="Contexte de l'achat…"></textarea></div>
+      <div class="recap" id="buyRecap"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeBuy()">Annuler</button>
+        <button class="btn" style="background:#5D8F6B" onclick="confirmBuy()">Confirmer l'achat</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
 // ============================================================
-// LISTE D'ACTIFS — Personnalisée selon ta demande
+// ACTIFS
 // ============================================================
 const ASSETS = [
-  { symbol: 'EURUSD=X', name: 'EUR/USD', decimals: 4 },
-  { symbol: 'GBPUSD=X', name: 'GBP/USD', decimals: 4 },
-  { symbol: 'USDJPY=X', name: 'USD/JPY', decimals: 2 },
-  { symbol: 'USDCHF=X', name: 'USD/CHF', decimals: 4 },
-  { symbol: 'USDCAD=X', name: 'USD/CAD', decimals: 4 },
-  { symbol: 'AUDUSD=X', name: 'AUD/USD', decimals: 4 },
-  { symbol: 'NZDUSD=X', name: 'NZD/USD', decimals: 4 },
-  { symbol: 'EURGBP=X', name: 'EUR/GBP', decimals: 4 },
-  { symbol: 'EURJPY=X', name: 'EUR/JPY', decimals: 2 },
-  { symbol: 'GBPJPY=X', name: 'GBP/JPY', decimals: 2 },
-  { symbol: 'YM=F',     name: 'Mini Dow Jones', decimals: 0 },
-  { symbol: '^GDAXI',   name: 'DAX 40', decimals: 2 },
+  { symbol:'EURUSD=X', name:'EUR/USD', decimals:4, pip:0.0001 },
+  { symbol:'GBPUSD=X', name:'GBP/USD', decimals:4, pip:0.0001 },
+  { symbol:'USDJPY=X', name:'USD/JPY', decimals:2, pip:0.01 },
+  { symbol:'USDCHF=X', name:'USD/CHF', decimals:4, pip:0.0001 },
+  { symbol:'USDCAD=X', name:'USD/CAD', decimals:4, pip:0.0001 },
+  { symbol:'AUDUSD=X', name:'AUD/USD', decimals:4, pip:0.0001 },
+  { symbol:'NZDUSD=X', name:'NZD/USD', decimals:4, pip:0.0001 },
+  { symbol:'EURGBP=X', name:'EUR/GBP', decimals:4, pip:0.0001 },
+  { symbol:'EURJPY=X', name:'EUR/JPY', decimals:2, pip:0.01 },
+  { symbol:'GBPJPY=X', name:'GBP/JPY', decimals:2, pip:0.01 },
+  { symbol:'YM=F',     name:'Mini Dow Jones', decimals:0, pip:1 },
+  { symbol:'^GDAXI',   name:'DAX 40', decimals:2, pip:1 },
 ];
-
-// Plusieurs proxies CORS en fallback (si un tombe, on essaie le suivant)
 const CORS_PROXIES = [
   'https://corsproxy.io/?url=',
   'https://api.allorigins.win/raw?url=',
@@ -269,215 +292,373 @@ const CORS_PROXIES = [
 ];
 
 // ============================================================
+// STOCKAGE
+// ============================================================
+const LS = {
+  positions: 'ichi_positions',
+  closed: 'ichi_closed',
+  settings: 'ichi_settings'
+};
+function load(key, def) { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : def; } catch(e){ return def; } }
+function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){} }
+
+let positions = load(LS.positions, []);
+let closed = load(LS.closed, []);
+let settings = load(LS.settings, { capital: 1000, risk: 2 });
+
+// ============================================================
 // CALCUL ICHIMOKU
 // ============================================================
 function ichimoku(candles) {
   const n = candles.length;
-  const out = candles.map(c => ({...c, tenkan:null, kijun:null, senkouA:null, senkouB:null, chikou:null}));
-  for (let i = 0; i < n; i++) {
-    if (i >= 8) {
-      const s = candles.slice(i-8, i+1);
-      out[i].tenkan = (Math.max(...s.map(x=>x.high)) + Math.min(...s.map(x=>x.low))) / 2;
-    }
-    if (i >= 25) {
-      const s = candles.slice(i-25, i+1);
-      out[i].kijun = (Math.max(...s.map(x=>x.high)) + Math.min(...s.map(x=>x.low))) / 2;
-    }
-    if (i >= 51) {
-      const s = candles.slice(i-51, i+1);
-      const sb = (Math.max(...s.map(x=>x.high)) + Math.min(...s.map(x=>x.low))) / 2;
-      if (i + 26 < n) out[i+26].senkouB = sb;
-      else out[i].senkouB_future = sb;
-    }
-    if (i >= 25 && out[i].tenkan != null && out[i].kijun != null) {
-      const sa = (out[i].tenkan + out[i].kijun) / 2;
-      if (i + 26 < n) out[i+26].senkouA = sa;
-      else out[i].senkouA_future = sa;
-    }
-  }
-  for (let i = 0; i < n; i++) {
-    if (i + 26 < n) out[i].chikou = candles[i+26].close;
+  const out = candles.map(c => ({...c, tenkan:null, kijun:null, senkouA:null, senkouB:null}));
+  for (let i=0;i<n;i++){
+    if(i>=8){ const s=candles.slice(i-8,i+1); out[i].tenkan=(Math.max(...s.map(x=>x.high))+Math.min(...s.map(x=>x.low)))/2; }
+    if(i>=25){ const s=candles.slice(i-25,i+1); out[i].kijun=(Math.max(...s.map(x=>x.high))+Math.min(...s.map(x=>x.low)))/2; }
+    if(i>=51){ const s=candles.slice(i-51,i+1); const sb=(Math.max(...s.map(x=>x.high))+Math.min(...s.map(x=>x.low)))/2;
+      if(i+26<n) out[i+26].senkouB=sb; else out[i].senkouB_future=sb; }
+    if(i>=25 && out[i].tenkan!=null && out[i].kijun!=null){ const sa=(out[i].tenkan+out[i].kijun)/2;
+      if(i+26<n) out[i+26].senkouA=sa; else out[i].senkouA_future=sa; }
   }
   return out;
 }
-
 function analyze(data) {
-  const last = data[data.length-1];
-  const prev = data[data.length-2];
-  if (!last || last.kijun == null || last.tenkan == null) return null;
-  const price = last.close;
-  const sA = last.senkouA, sB = last.senkouB;
-  const kumoTop = (sA != null && sB != null) ? Math.max(sA, sB) : null;
-  const idx26 = data.length - 1 - 26;
-  const chikouFree = idx26 >= 0 ? price > data[idx26].close : false;
-  const conditions = [
-    chikouFree,
-    price > Math.max(last.tenkan, last.kijun),
-    kumoTop != null && price > kumoTop,
-    last.tenkan > last.kijun,
-    (last.senkouA_future || sA) > (last.senkouB_future || sB)
-  ];
-  const score = conditions.filter(Boolean).length;
-  const tkW = Math.abs(last.tenkan - last.kijun);
-  const kW = (sA != null && sB != null) ? Math.abs(sA - sB) : 0;
-  const anomaly = kW > 0 && tkW > kW;
+  const last=data[data.length-1];
+  if(!last||last.kijun==null||last.tenkan==null) return null;
+  const price=last.close, sA=last.senkouA, sB=last.senkouB;
+  const kumoTop=(sA!=null&&sB!=null)?Math.max(sA,sB):null;
+  const kumoBot=(sA!=null&&sB!=null)?Math.min(sA,sB):null;
+  const idx26=data.length-1-26;
+  const chikouFree=idx26>=0?price>data[idx26].close:false;
+  const cond=[chikouFree, price>Math.max(last.tenkan,last.kijun), kumoTop!=null&&price>kumoTop,
+              last.tenkan>last.kijun, (last.senkouA_future||sA)>(last.senkouB_future||sB)];
+  const score=cond.filter(Boolean).length;
+  const tkW=Math.abs(last.tenkan-last.kijun), kW=(sA!=null&&sB!=null)?Math.abs(sA-sB):0;
+  const anomaly=kW>0&&tkW>kW;
+  const prev=data[data.length-2];
+  const bearishCross=prev&&prev.tenkan!=null&&prev.kijun!=null&&prev.tenkan>=prev.kijun&&last.tenkan<last.kijun;
+  const belowKumo=kumoBot!=null&&price<kumoBot;
   let verdict;
-  if (score === 5 && !anomaly) verdict = 'BUY_STRONG';
-  else if (score >= 3 && !anomaly) verdict = 'WATCH';
-  else if (score <= 1) verdict = 'AVOID';
-  else verdict = 'NEUTRAL';
-  return { score, verdict, anomaly };
+  if(score===5&&!anomaly) verdict='BUY_STRONG';
+  else if(score>=3&&!anomaly) verdict='WATCH';
+  else if(score<=1) verdict='AVOID';
+  else verdict='NEUTRAL';
+  return { score, verdict, anomaly, bearishCross, belowKumo, kijun:last.kijun, senkouB:sB,
+           recentSenkouB: data.slice(-60).map(d=>d.senkouB).filter(v=>v!=null) };
 }
 
 // ============================================================
-// API YAHOO FINANCE avec fallback de proxies
+// API
 // ============================================================
 async function fetchCandles(symbol, interval, range) {
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
-  let lastErr;
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const url = proxy + encodeURIComponent(yahooUrl);
-      const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      if (!data.chart || !data.chart.result || !data.chart.result[0]) throw new Error('Pas de données');
-      const r = data.chart.result[0];
-      const ts = r.timestamp || [];
-      const q = r.indicators.quote[0];
-      const candles = ts.map((t, i) => ({
-        date: new Date(t * 1000),
-        open: q.open[i],
-        high: q.high[i],
-        low: q.low[i],
-        close: q.close[i]
-      })).filter(c => c.close != null && c.high != null && c.low != null);
+  const yurl=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
+  let err;
+  for(const px of CORS_PROXIES){
+    try{
+      const resp=await fetch(px+encodeURIComponent(yurl), { signal: AbortSignal.timeout(15000) });
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      const data=await resp.json();
+      const r=data.chart&&data.chart.result&&data.chart.result[0];
+      if(!r) throw new Error('vide');
+      const ts=r.timestamp||[], q=r.indicators.quote[0];
+      const candles=ts.map((t,i)=>({date:new Date(t*1000),open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i]}))
+                      .filter(c=>c.close!=null&&c.high!=null&&c.low!=null);
+      if(candles.length<60) throw new Error('peu de données');
       return candles;
-    } catch (e) {
-      lastErr = e;
-      continue;
-    }
+    }catch(e){ err=e; }
   }
-  throw lastErr || new Error('Tous les proxies ont échoué');
+  throw err||new Error('échec');
 }
 
 // ============================================================
-// AFFICHAGE
+// SCREENER
 // ============================================================
-function badgeHTML(verdict, anomaly, confluence) {
-  if (confluence) return '<span class="badge badge-confluence">🚀 CONFLUENCE</span>';
-  const map = {
-    BUY_STRONG: ['badge-buy', '🟢 ACHETER'],
-    WATCH: ['badge-watch', '🟡 SURVEILLER'],
-    NEUTRAL: ['badge-neutral', '⚪ NEUTRE'],
-    AVOID: ['badge-avoid', '🔴 ÉVITER']
-  };
-  const [cls, label] = map[verdict] || map.NEUTRAL;
-  const warn = anomaly ? '<span class="anomaly">⚠️</span>' : '';
-  return `<span class="badge ${cls}">${label}</span>${warn}`;
+const results={};
+function badge(verdict, anomaly, confluence) {
+  if(confluence) return '<span class="badge badge-confluence">🚀 CONFLUENCE</span>';
+  const map={BUY_STRONG:['badge-buy','🟢 ACHETER'],WATCH:['badge-watch','🟡 SURVEILLER'],
+             NEUTRAL:['badge-neutral','⚪ NEUTRE'],AVOID:['badge-avoid','🔴 ÉVITER']};
+  const [c,l]=map[verdict]||map.NEUTRAL;
+  return `<span class="badge ${c}">${l}</span>`+(anomaly?'<span class="warn-icon">⚠️</span>':'');
 }
-
-function emptyBadge() {
-  return '<span class="badge badge-neutral">⏳</span>';
-}
-
-function renderRow(asset, result) {
-  if (!result || result.loading) {
-    return `<tr id="row-${asset.symbol}">
-      <td>
-        <div class="ticker">${asset.name}</div>
-        <div class="conditions">${asset.symbol}</div>
-      </td>
-      <td colSpan="6" class="loading">${result?.error ? `<span class="error">⚠ ${result.error}</span>` : '⏳ Chargement…'}</td>
-    </tr>`;
-  }
-  const { price, change, daily, weekly, confluence } = result;
-  const changeCls = change >= 0 ? 'pos' : 'neg';
-  return `<tr id="row-${asset.symbol}">
-    <td>
-      <div class="ticker">${asset.name}</div>
-      <div class="conditions">${asset.symbol}</div>
-    </td>
-    <td class="right">${price != null ? price.toFixed(asset.decimals) : '—'}</td>
-    <td class="right ${changeCls}">${change != null ? (change >= 0 ? '+' : '') + change.toFixed(2) + '%' : '—'}</td>
-    <td class="center">${weekly ? badgeHTML(weekly.verdict, weekly.anomaly) : emptyBadge()}</td>
-    <td class="center">${daily ? badgeHTML(daily.verdict, daily.anomaly) : emptyBadge()}</td>
-    <td class="center"><strong>${daily ? daily.score + '/5' : '—'}</strong></td>
-    <td class="center">${daily ? badgeHTML(daily.verdict, daily.anomaly, confluence) : emptyBadge()}</td>
+function screenerRow(a, r) {
+  if(!r||r.loading) return `<tr><td><div class="ticker">${a.name}</div><div class="sub">${a.symbol}</div></td>
+    <td colspan="7" class="loading">${r&&r.error?'<span class="error">⚠ '+r.error+'</span>':'⏳ Chargement…'}</td></tr>`;
+  const ch=r.change>=0?'pos':'neg';
+  const canBuy=r.daily&&r.daily.verdict!=='AVOID';
+  return `<tr>
+    <td><div class="ticker">${a.name}</div><div class="sub">${a.symbol}</div></td>
+    <td class="right">${r.price!=null?r.price.toFixed(a.decimals):'—'}</td>
+    <td class="right ${ch}">${r.change!=null?(r.change>=0?'+':'')+r.change.toFixed(2)+'%':'—'}</td>
+    <td class="center">${r.weekly?badge(r.weekly.verdict,r.weekly.anomaly):'—'}</td>
+    <td class="center">${r.daily?badge(r.daily.verdict,r.daily.anomaly):'—'}</td>
+    <td class="center"><strong>${r.daily?r.daily.score+'/5':'—'}</strong></td>
+    <td class="center">${r.daily?badge(r.daily.verdict,r.daily.anomaly,r.confluence):'—'}</td>
+    <td class="center">${canBuy?`<button class="btn-buy" onclick="openBuy('${a.symbol}')">Acheter</button>`:'<span class="sub">—</span>'}</td>
   </tr>`;
 }
-
-function updateStats(results) {
-  const arr = Object.values(results).filter(r => r && !r.loading && !r.error);
-  document.getElementById('totalCount').textContent = arr.length;
-  document.getElementById('confluenceCount').textContent = arr.filter(r => r.confluence).length;
-  document.getElementById('buyCount').textContent = arr.filter(r => r.daily?.verdict === 'BUY_STRONG').length;
-  document.getElementById('avoidCount').textContent = arr.filter(r => r.daily?.verdict === 'AVOID').length;
-}
-
-function renderAll(results) {
-  // Tri : confluence en premier, puis par verdict
-  const order = { BUY_STRONG: 0, WATCH: 1, NEUTRAL: 2, AVOID: 3 };
-  const sorted = [...ASSETS].sort((a, b) => {
-    const ra = results[a.symbol], rb = results[b.symbol];
-    if (!ra || !rb) return 0;
-    if (ra.confluence && !rb.confluence) return -1;
-    if (!ra.confluence && rb.confluence) return 1;
-    return (order[ra.daily?.verdict] ?? 9) - (order[rb.daily?.verdict] ?? 9);
+function renderScreener() {
+  const order={BUY_STRONG:0,WATCH:1,NEUTRAL:2,AVOID:3};
+  const sorted=[...ASSETS].sort((a,b)=>{
+    const ra=results[a.symbol],rb=results[b.symbol];
+    if(!ra||!rb||ra.loading||rb.loading) return 0;
+    if(ra.confluence&&!rb.confluence) return -1;
+    if(!ra.confluence&&rb.confluence) return 1;
+    return (order[ra.daily?.verdict]??9)-(order[rb.daily?.verdict]??9);
   });
-  document.getElementById('tableBody').innerHTML = sorted.map(a => renderRow(a, results[a.symbol])).join('');
-  updateStats(results);
+  document.getElementById('screenerBody').innerHTML=sorted.map(a=>screenerRow(a,results[a.symbol])).join('');
+  const arr=Object.values(results).filter(r=>r&&!r.loading&&!r.error);
+  document.getElementById('totalCount').textContent=arr.length;
+  document.getElementById('confluenceCount').textContent=arr.filter(r=>r.confluence).length;
+  document.getElementById('buyCount').textContent=arr.filter(r=>r.daily?.verdict==='BUY_STRONG').length;
+  document.getElementById('avoidCount').textContent=arr.filter(r=>r.daily?.verdict==='AVOID').length;
 }
-
-// ============================================================
-// LANCEMENT
-// ============================================================
-const results = {};
-
-async function analyzeOne(asset) {
-  results[asset.symbol] = { loading: true };
-  renderAll(results);
-  try {
-    const [daily, weekly] = await Promise.all([
-      fetchCandles(asset.symbol, '1d', '1y'),
-      fetchCandles(asset.symbol, '1wk', '5y')
-    ]);
-    const dSig = analyze(ichimoku(daily));
-    const wSig = analyze(ichimoku(weekly));
-    const price = daily[daily.length-1].close;
-    const prevPrice = daily[daily.length-2]?.close || price;
-    const change = ((price - prevPrice) / prevPrice) * 100;
-    const confluence = dSig?.verdict === 'BUY_STRONG' && wSig?.verdict === 'BUY_STRONG';
-    results[asset.symbol] = { price, change, daily: dSig, weekly: wSig, confluence };
-  } catch (e) {
-    results[asset.symbol] = { error: e.message };
-  }
-  renderAll(results);
+async function analyzeOne(a) {
+  results[a.symbol]={loading:true}; renderScreener();
+  try{
+    const [d,w]=await Promise.all([fetchCandles(a.symbol,'1d','1y'),fetchCandles(a.symbol,'1wk','5y')]);
+    const dS=analyze(ichimoku(d)), wS=analyze(ichimoku(w));
+    const price=d[d.length-1].close, pp=d[d.length-2]?.close||price;
+    const change=((price-pp)/pp)*100;
+    const confluence=dS?.verdict==='BUY_STRONG'&&wS?.verdict==='BUY_STRONG';
+    results[a.symbol]={price,change,daily:dS,weekly:wS,confluence};
+  }catch(e){ results[a.symbol]={error:e.message}; }
+  renderScreener(); renderPortfolio();
 }
-
 async function runAnalysis() {
-  const btn = document.getElementById('refreshBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Analyse en cours…';
-  document.getElementById('updateInfo').textContent = 'Analyse en cours, patience (1-2 min)…';
-  // Marquer tous en chargement
-  ASSETS.forEach(a => { results[a.symbol] = { loading: true }; });
-  renderAll(results);
-  // Lancer en parallèle par batch de 3 pour pas saturer
-  for (let i = 0; i < ASSETS.length; i += 3) {
-    const batch = ASSETS.slice(i, i + 3);
-    await Promise.all(batch.map(analyzeOne));
-  }
-  const now = new Date();
-  document.getElementById('updateInfo').textContent = '✓ Dernière analyse : ' + now.toLocaleString('fr-FR');
-  btn.disabled = false;
-  btn.textContent = '↻ Analyser tous les actifs';
+  const btn=document.getElementById('refreshBtn');
+  btn.disabled=true; btn.textContent='⏳ Analyse…';
+  document.getElementById('updateInfo').textContent='Analyse en cours (1-2 min)…';
+  ASSETS.forEach(a=>{results[a.symbol]={loading:true};}); renderScreener();
+  for(let i=0;i<ASSETS.length;i+=3){ await Promise.all(ASSETS.slice(i,i+3).map(analyzeOne)); }
+  document.getElementById('updateInfo').textContent='✓ '+new Date().toLocaleString('fr-FR');
+  btn.disabled=false; btn.textContent='↻ Actualiser';
 }
 
-// Lancement auto au chargement
-window.addEventListener('load', () => {
-  setTimeout(runAnalysis, 500);
-});
+// ============================================================
+// MODALE ACHAT
+// ============================================================
+let buySymbol=null;
+function openBuy(symbol) {
+  buySymbol=symbol;
+  const a=ASSETS.find(x=>x.symbol===symbol);
+  const r=results[symbol];
+  if(!r||!r.daily){ alert("Données pas encore prêtes, patiente."); return; }
+  const price=r.price;
+  const kijun=r.daily.kijun;
+  // Stop : 30 pips sous le dernier plat de Kijun
+  const stop=kijun-30*a.pip;
+  // Limites = paliers de Senkou B au-dessus du prix
+  const sbAbove=[...new Set(r.daily.recentSenkouB)].filter(v=>v>price).sort((x,y)=>x-y);
+  const l1=sbAbove[0]||price*1.02;
+  const l2=sbAbove[Math.floor(sbAbove.length/2)]||price*1.04;
+  const l3=sbAbove[sbAbove.length-1]||price*1.08;
+  // Quantité selon risque
+  const riskAmount=settings.capital*(settings.risk/100);
+  const stopDist=Math.abs(price-stop);
+  const qty=stopDist>0?(riskAmount/stopDist):0;
+
+  document.getElementById('buyTitle').textContent='Acheter '+a.name;
+  document.getElementById('buySub').textContent=a.symbol+' · cours '+price.toFixed(a.decimals);
+  document.getElementById('buyQty').value=qty.toFixed(a.decimals===0?2:0)>0?Math.max(0,Math.round(qty*100)/100):0;
+  document.getElementById('buyQtyHint').textContent='Suggérée pour risquer '+settings.risk+'% ('+riskAmount.toFixed(0)+'€)';
+  document.getElementById('buyEntry').value=price.toFixed(a.decimals);
+  document.getElementById('buyDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('buyStop').value=stop.toFixed(a.decimals);
+  document.getElementById('buyL1').value=l1.toFixed(a.decimals);
+  document.getElementById('buyL2').value=l2.toFixed(a.decimals);
+  document.getElementById('buyL3').value=l3.toFixed(a.decimals);
+  document.getElementById('buyNote').value='';
+  updateBuyRecap();
+  ['buyQty','buyEntry','buyStop','buyL1'].forEach(id=>document.getElementById(id).oninput=updateBuyRecap);
+  document.getElementById('buyModal').classList.add('show');
+}
+function updateBuyRecap() {
+  const a=ASSETS.find(x=>x.symbol===buySymbol);
+  const qty=parseFloat(document.getElementById('buyQty').value)||0;
+  const entry=parseFloat(document.getElementById('buyEntry').value)||0;
+  const stop=parseFloat(document.getElementById('buyStop').value)||0;
+  const l1=parseFloat(document.getElementById('buyL1').value)||0;
+  const risk=(entry-stop)*qty;
+  const reward=(l1-entry)*qty;
+  const ratio=Math.abs(entry-stop)>0?Math.abs((l1-entry)/(entry-stop)):0;
+  const riskPct=settings.capital>0?(risk/settings.capital)*100:0;
+  document.getElementById('buyRecap').innerHTML=
+    `<div class="line"><span>Risque jusqu'au stop</span><span>${risk.toFixed(2)}€ (${riskPct.toFixed(1)}% du capital)</span></div>
+     <div class="line"><span>Gain potentiel L1</span><span>${reward.toFixed(2)}€</span></div>
+     <div class="line"><span>Ratio gain/risque</span><span style="color:${ratio>=2?'#5D8F6B':'#B85547'}">${ratio.toFixed(2)}:1 ${ratio<2?'⚠️':'✓'}</span></div>`
+    +(riskPct>settings.risk?`<div class="line" style="color:#B85547">⚠️ Risque au-dessus de ton réglage (${settings.risk}%)</div>`:'');
+}
+function closeBuy(){ document.getElementById('buyModal').classList.remove('show'); }
+function confirmBuy() {
+  const a=ASSETS.find(x=>x.symbol===buySymbol);
+  const qty=parseFloat(document.getElementById('buyQty').value)||0;
+  if(qty<=0){ alert('Quantité invalide.'); return; }
+  positions.push({
+    id:Date.now().toString(), symbol:buySymbol, name:a.name, decimals:a.decimals,
+    qty, entry:parseFloat(document.getElementById('buyEntry').value),
+    date:document.getElementById('buyDate').value,
+    stop:parseFloat(document.getElementById('buyStop').value),
+    l1:parseFloat(document.getElementById('buyL1').value),
+    l2:parseFloat(document.getElementById('buyL2').value),
+    l3:parseFloat(document.getElementById('buyL3').value),
+    note:document.getElementById('buyNote').value
+  });
+  save(LS.positions,positions);
+  closeBuy(); renderPortfolio(); updatePill();
+  switchTab('portfolio');
+}
+
+// ============================================================
+// PORTEFEUILLE
+// ============================================================
+function renderPortfolio() {
+  const list=document.getElementById('portfolioList');
+  if(positions.length===0){ list.innerHTML='<div class="empty">Aucune position ouverte. Va dans Screener et clique « Acheter ».</div>';
+    document.getElementById('pfValue').textContent='—'; document.getElementById('pfCost').textContent='—';
+    document.getElementById('pfPL').textContent='—'; document.getElementById('pfPct').textContent='—';
+    updatePill(); return; }
+  let totVal=0, totCost=0;
+  list.innerHTML=positions.map(p=>{
+    const r=results[p.symbol];
+    const cur=r&&r.price!=null?r.price:p.entry;
+    const plAmt=(cur-p.entry)*p.qty;
+    const plPct=((cur-p.entry)/p.entry)*100;
+    const days=Math.floor((Date.now()-new Date(p.date).getTime())/86400000);
+    totVal+=cur*p.qty; totCost+=p.entry*p.qty;
+    // alertes
+    const alerts=[];
+    if(r&&r.daily){
+      if(r.daily.bearishCross) alerts.push('🔴 Croisement Tenkan/Kijun baissier');
+      if(r.daily.belowKumo) alerts.push('🔴 Cours sous le Kumo');
+      if(r.daily.anomaly) alerts.push('⚠️ Anomalie de tendance');
+    }
+    if(cur<=p.stop) alerts.push('⛔ Stop-loss touché');
+    if(plPct>=20) alerts.push('🎯 +20% atteint');
+    let lvl=0; if(cur>=p.l1)lvl=1; if(cur>=p.l2)lvl=2; if(cur>=p.l3)lvl=3;
+    const prog=Math.min(100,Math.max(0,((cur-p.entry)/(p.l3-p.entry))*100));
+    const plc=plPct>=0?'pos':'neg';
+    return `<div class="pos-card">
+      <div class="pos-head">
+        <div><span class="ticker" style="font-size:17px">${p.name}</span> <span class="sub">${p.symbol}</span>
+          <div class="sub">Entré le ${new Date(p.date).toLocaleDateString('fr-FR')} · ${days}j · Qté ${p.qty}</div></div>
+        <div style="text-align:right">
+          <div class="sub">Cours ${cur.toFixed(p.decimals)}</div>
+          <div class="${plc}" style="font-size:18px">${plPct>=0?'+':''}${plPct.toFixed(2)}%</div>
+          <div class="${plc}" style="font-size:13px">${plAmt>=0?'+':''}${plAmt.toFixed(2)}€</div>
+        </div>
+      </div>
+      <div class="progress"><div class="progress-fill" style="width:${prog}%"></div></div>
+      <div class="sub" style="margin-top:4px">Entrée ${p.entry.toFixed(p.decimals)} · Stop ${p.stop.toFixed(p.decimals)} · L1 ${p.l1.toFixed(p.decimals)} · L2 ${p.l2.toFixed(p.decimals)} · L3 ${p.l3.toFixed(p.decimals)} ${lvl>0?'· 🎯 L'+lvl+' atteinte':''}</div>
+      ${alerts.length?`<div class="alert-box">${alerts.join('<br>')}</div>`:''}
+      ${p.note?`<div class="sub" style="margin-top:6px">📝 ${p.note}</div>`:''}
+      <div style="margin-top:10px"><button class="btn-sell" onclick="sellPosition('${p.id}')">Vendre</button></div>
+    </div>`;
+  }).join('');
+  const pl=totVal-totCost, pct=totCost>0?(pl/totCost)*100:0;
+  document.getElementById('pfValue').textContent=totVal.toFixed(2)+'€';
+  document.getElementById('pfCost').textContent=totCost.toFixed(2)+'€';
+  const plEl=document.getElementById('pfPL'); plEl.textContent=(pl>=0?'+':'')+pl.toFixed(2)+'€'; plEl.style.color=pl>=0?'#5D8F6B':'#B85547';
+  const pctEl=document.getElementById('pfPct'); pctEl.textContent=(pct>=0?'+':'')+pct.toFixed(2)+'%'; pctEl.style.color=pct>=0?'#5D8F6B':'#B85547';
+  updatePill();
+}
+function updatePill(){
+  const pill=document.getElementById('posPill');
+  if(positions.length>0){ pill.style.display='inline-block'; pill.textContent=positions.length; }
+  else pill.style.display='none';
+}
+function sellPosition(id) {
+  const p=positions.find(x=>x.id===id); if(!p) return;
+  const r=results[p.symbol];
+  const cur=r&&r.price!=null?r.price:p.entry;
+  if(!confirm(`Vendre ${p.name} à ${cur.toFixed(p.decimals)} ?`)) return;
+  const reason=prompt('Raison de la vente ?','Signal de sortie')||'Vente';
+  closed.push({...p, exitPrice:cur, exitDate:new Date().toISOString(),
+    realizedPL:(cur-p.entry)*p.qty, realizedPct:((cur-p.entry)/p.entry)*100, reason});
+  positions=positions.filter(x=>x.id!==id);
+  save(LS.positions,positions); save(LS.closed,closed);
+  renderPortfolio(); renderHistory(); updatePill();
+}
+
+// ============================================================
+// HISTORIQUE
+// ============================================================
+function renderHistory() {
+  const body=document.getElementById('historyBody');
+  if(closed.length===0){ body.innerHTML='<tr><td colspan="8" class="empty">Aucun trade clôturé.</td></tr>';
+    document.getElementById('hTotal').textContent='0'; document.getElementById('hWinRate').textContent='—';
+    document.getElementById('hPL').textContent='—'; document.getElementById('hAvg').textContent='—'; return; }
+  body.innerHTML=[...closed].reverse().map(c=>{
+    const plc=c.realizedPL>=0?'pos':'neg';
+    return `<tr>
+      <td class="sub">${new Date(c.exitDate).toLocaleDateString('fr-FR')}</td>
+      <td>${c.name}</td>
+      <td class="right">${c.entry.toFixed(c.decimals)}</td>
+      <td class="right">${c.exitPrice.toFixed(c.decimals)}</td>
+      <td class="right">${c.qty}</td>
+      <td class="right ${plc}">${c.realizedPL>=0?'+':''}${c.realizedPL.toFixed(2)}€</td>
+      <td class="right ${plc}">${c.realizedPct>=0?'+':''}${c.realizedPct.toFixed(2)}%</td>
+      <td class="sub">${c.reason}</td></tr>`;
+  }).join('');
+  const wins=closed.filter(c=>c.realizedPL>0), losses=closed.filter(c=>c.realizedPL<0);
+  const totPL=closed.reduce((s,c)=>s+c.realizedPL,0);
+  const avgW=wins.length?wins.reduce((s,c)=>s+c.realizedPL,0)/wins.length:0;
+  const avgL=losses.length?losses.reduce((s,c)=>s+c.realizedPL,0)/losses.length:0;
+  document.getElementById('hTotal').textContent=closed.length;
+  document.getElementById('hWinRate').textContent=((wins.length/closed.length)*100).toFixed(0)+'%';
+  const plEl=document.getElementById('hPL'); plEl.textContent=(totPL>=0?'+':'')+totPL.toFixed(2)+'€'; plEl.style.color=totPL>=0?'#5D8F6B':'#B85547';
+  document.getElementById('hAvg').innerHTML=`<span class="pos">+${avgW.toFixed(0)}€</span> / <span class="neg">${avgL.toFixed(0)}€</span>`;
+}
+
+// ============================================================
+// REGLAGES + SYNC
+// ============================================================
+function saveSettings() {
+  settings.capital=parseFloat(document.getElementById('setCapital').value)||1000;
+  settings.risk=parseFloat(document.getElementById('setRisk').value)||2;
+  save(LS.settings,settings);
+}
+function exportData() {
+  const payload=btoa(unescape(encodeURIComponent(JSON.stringify({positions,closed,settings}))));
+  navigator.clipboard.writeText(payload).then(()=>alert('Sauvegarde copiée ! Colle-la sur ton autre appareil.'),
+    ()=>{ document.getElementById('importBox').value=payload; alert('Copie auto impossible — le code est dans la case ci-dessous, copie-le manuellement.'); });
+}
+function importData() {
+  const txt=document.getElementById('importBox').value.trim();
+  if(!txt){ alert('Colle d\'abord un code de sauvegarde.'); return; }
+  try{
+    const data=JSON.parse(decodeURIComponent(escape(atob(txt))));
+    if(data.positions) positions=data.positions;
+    if(data.closed) closed=data.closed;
+    if(data.settings) settings=data.settings;
+    save(LS.positions,positions); save(LS.closed,closed); save(LS.settings,settings);
+    document.getElementById('setCapital').value=settings.capital;
+    document.getElementById('setRisk').value=settings.risk;
+    renderPortfolio(); renderHistory(); updatePill();
+    alert('Sauvegarde restaurée !');
+  }catch(e){ alert('Code invalide.'); }
+}
+function resetAll() {
+  if(!confirm('Effacer toutes les positions et l\'historique ?')) return;
+  positions=[]; closed=[]; save(LS.positions,positions); save(LS.closed,closed);
+  renderPortfolio(); renderHistory(); updatePill();
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+tab));
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.getElementById('setCapital').value=settings.capital;
+document.getElementById('setRisk').value=settings.risk;
+renderPortfolio(); renderHistory(); updatePill();
+window.addEventListener('load',()=>setTimeout(runAnalysis,400));
 </script>
 </body>
 </html>
